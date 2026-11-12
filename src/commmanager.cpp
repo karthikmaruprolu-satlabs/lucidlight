@@ -1,5 +1,7 @@
 #include "commmanager.h"
 
+#include <QDebug>
+
 CommManager::CommManager(QObject *parent) : QObject(parent) {}
 
 CommManager::~CommManager() {

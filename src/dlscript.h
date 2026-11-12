@@ -261,7 +261,7 @@ public:
     Q_INVOKABLE void OpenProject(const QString &filePathName);
     Q_INVOKABLE void LoadProgramOptions(const QString &filePathName);
     Q_INVOKABLE void SaveProgramOptions(const QString &filePathName);
-    Q_INVOKABLE void StartLogging(const QString &baseFilePath, bool appendData = true,
+    Q_INVOKABLE bool StartLogging(const QString &baseFilePath, bool appendData = true,
                                   const QString &representations = QStringLiteral("AHDB"),
                                   int format = 0, bool highspeed = false,
                                   bool noHeaders = false);

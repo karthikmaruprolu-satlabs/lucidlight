@@ -93,6 +93,9 @@ public:
     Q_INVOKABLE QString scriptDrainReceiveComments();
     Q_INVOKABLE QString scriptChannelSettings(int channel);
     Q_INVOKABLE bool scriptSetChannelSettings(const QString &settings, int channel);
+    // Single queue-safe entry point for the script engine: dispatches by
+    // name with QVariantList arguments, avoiding raw metatype marshalling.
+    Q_INVOKABLE QVariant scriptInvoke(const QString &name, const QVariantList &args);
     Q_INVOKABLE int scriptChannelStatus(int channel);
     Q_INVOKABLE bool scriptOpenProject(const QString &path);
     Q_INVOKABLE void scriptSetContentsFilter(int filter);

@@ -82,8 +82,13 @@ not source-compatible, but the DL API names and semantics are replicated.
 ### Methods (basic)
 - [x] DL.StartCommunication / StopCommunication / DL.ClearCommWindows*
 - [x] DL.SendSequence nameOrIndex [, parameters] [, representation]
-      (with DL_OnSend data manipulation before the bytes hit the line)
+      (wildcard areas filled Docklight-style — ASCII chars fill the area and
+      pad with blanks, comma-separated values for H/D/B; DL_OnSend data
+      manipulation before the bytes hit the line)
 - [x] DL.WaitForSequence(nameOrIndex [, maxCounter] [, timeout]) → counter
+      (absolute hit counter since comm start / last reset, like Docklight;
+      also matches against the engine's local stream so quick answers are
+      never missed)
 - [x] DL.AddComment (timeStampAfterComment, lineBreakAndPadding)
 - [x] DL.GetDocklightTimeStamp ([dateTime] [, millis] [, trimmed])
 - [x] DL.Pause + DL.Wait alias

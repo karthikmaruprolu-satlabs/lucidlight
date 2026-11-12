@@ -495,16 +495,28 @@ bool Backend::buildSendElements(const Sequence &seq, const QStringList &paramete
         value = uchar(ok ? qBound(0, number, 255) : 0);
     };
     for (const auto &runInfo : runs) {
+        // Docklight: one parameter fills the whole wildcard area with its
+        // characters (ASCII), truncated or padded with blanks. Hex/Dec/Bin
+        // parameters are per-byte values separated by commas.
         const QString param = paramIndex < params.size() ? params.at(paramIndex) : QString();
         ++paramIndex;
         QStringList pieces;
-        if (paramFormat == DataFormat::Format::Text)
-            pieces = param.isEmpty() ? QStringList{QString()} : param.split(' ');
-        else
-            pieces = param.split(',', Qt::SkipEmptyParts);
+        if (paramFormat == DataFormat::Format::Text) {
+            for (int k = 0; k < runInfo.second; ++k) {
+                uchar value = 0x20;   // ASCII blank padding
+                if (k < param.size()) {
+                    const QByteArray encoded = QString(param.at(k)).toUtf8();
+                    value = encoded.isEmpty() ? 0x20 : uchar(encoded.at(0));
+                }
+                elements[runInfo.first + k].kind = ParsedBytes::Element::Data;
+                elements[runInfo.first + k].value = value;
+            }
+            continue;
+        }
+        pieces = param.split(',', Qt::SkipEmptyParts);
         for (int k = 0; k < runInfo.second; ++k) {
             const QString piece = k < pieces.size() ? pieces.at(k) : QString();
-            uchar value = paramFormat == DataFormat::Format::Text ? 0x20 : 0;
+            uchar value = 0;
             fillByte(value, piece);
             elements[runInfo.first + k].kind = ParsedBytes::Element::Data;
             elements[runInfo.first + k].value = value;
@@ -616,7 +628,8 @@ QString Backend::scriptDrainReceiveComments() {
 }
 
 QString Backend::scriptChannelSettings(int channel) {
-    const ChannelSettings *settings = channel == 1 ? m_b : m_a;
+    // Docklight numbers channels 1 and 2; internally they are A and B.
+    const ChannelSettings *settings = channel == 2 ? m_b : m_a;
     const SerialConfig &config = settings->config();
     // Network channels carry their whole configuration in the device string.
     if (CommLink::isNetworkDevice(config.device))
@@ -633,7 +646,7 @@ QString Backend::scriptChannelSettings(int channel) {
 }
 
 bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
-    ChannelSettings *target = channel == 1 ? m_b : m_a;
+    ChannelSettings *target = channel == 2 ? m_b : m_a;
     QString text = settings.trimmed();
     if (text == QLatin1String(">")) {
         // Find the next available serial port.
@@ -716,7 +729,7 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
 int Backend::scriptChannelStatus(int channel) {
     if (!m_comm->running())
         return 0;
-    const CommLink *link = m_comm->link(channel == 1 ? 1 : 0);
+    const CommLink *link = m_comm->link(channel == 2 ? 1 : 0);
     if (!link)
         return 3;
     // A listening TCP server reports "waiting" until a partner connects,
@@ -859,7 +872,12 @@ void Backend::scriptSendSequence(int row, const QString &customData,
 }
 
 void Backend::scriptSendSequenceDone() {
-    // The worker parks on this counter; nothing else to do here.
+    // Emitted after each queued DL.SendSequence went out. The signal body
+    // wakes the parked worker directly, mirroring Docklight's synchronous
+    // hand-off; the parked waitUntil() picks it up in its next 50 ms slice.
+    DLScriptEngine *engine = m_runner ? m_runner->engine() : nullptr;
+    if (engine)
+        QMetaObject::invokeMethod(engine, "onSendRequestDone", Qt::QueuedConnection);
 }
 
 // Docklight's F2/F3: continuous logging into the _asc/_hex/_dec/_bin files
@@ -919,6 +937,55 @@ void Backend::runScriptFile(const QString &path) {
     const QString code = QString::fromUtf8(file.readAll());
     emit toast(tr("Startup script: %1").arg(path));
     m_runner->run(code);
+}
+
+QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {
+    auto arg = [&args](int i) { return args.value(i); };
+    if (name == "scriptChannelStatus")
+        return scriptChannelStatus(arg(0).toInt());
+    if (name == "scriptChannelSettings")
+        return scriptChannelSettings(arg(0).toInt());
+    if (name == "scriptSetChannelSettings")
+        return scriptSetChannelSettings(arg(0).toString(), arg(1).toInt());
+    if (name == "scriptOpenProject")
+        return scriptOpenProject(arg(0).toString());
+    if (name == "scriptLoadOptions")
+        return scriptLoadOptions(arg(0).toString());
+    if (name == "scriptSaveOptions")
+        return scriptSaveOptions(arg(0).toString());
+    if (name == "scriptStartLogging")
+        return scriptStartLogging(arg(0).toString(), arg(1).toBool(), arg(2).toString(),
+                                  arg(3).toInt(), arg(4).toBool());
+    if (name == "scriptStopLogging") {
+        scriptStopLogging();
+        return {};
+    }
+    if (name == "scriptSetContentsFilter") {
+        scriptSetContentsFilter(arg(0).toInt());
+        return {};
+    }
+    if (name == "scriptSetWindowLayout") {
+        scriptSetWindowLayout(arg(0).toString());
+        return {};
+    }
+    if (name == "scriptCommWindowData")
+        return scriptCommWindowData(arg(0).toString());
+    if (name == "scriptSetUserOutput") {
+        scriptSetUserOutput(arg(0).toString());
+        return {};
+    }
+    if (name == "scriptPortList")
+        return scriptPortList();
+    if (name == "scriptReceiveCount")
+        return scriptReceiveCount(arg(0).toInt());
+    if (name == "scriptResetCounters") {
+        scriptResetCounters(arg(0).toInt());
+        return {};
+    }
+    if (name == "scriptDrainReceiveComments")
+        return scriptDrainReceiveComments();
+    qWarning() << "scriptInvoke: unknown method" << name;
+    return {};
 }
 
 QString Backend::scriptPortList() {

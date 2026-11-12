@@ -1254,6 +1254,106 @@ private slots:
         QVERIFY(got.contains("scripted"));
     }
 
+    void fullDocklightScriptingScenario()
+    {
+        // One scripted session against a live TCP device exercising the
+        // whole Docklight surface: sequences with parameters, OnSend data
+        // manipulation, receive triggers with comment macros, WaitForSequence
+        // counters, a side channel, file logging and file output.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        const quint16 port = server.serverPort();
+        QByteArray deviceGot;
+        bool sawPing = false;
+        bool sawCmd42 = false;
+        QEventLoop deviceLoop;
+        QTimer::singleShot(15000, &deviceLoop, &QEventLoop::quit);
+        connect(&server, &QTcpServer::newConnection, &server, [&] {
+            QTcpSocket *peer = server.nextPendingConnection();
+            connect(peer, &QAbstractSocket::readyRead, peer, [peer, &deviceGot, &sawPing, &sawCmd42] {
+                deviceGot += peer->readAll();
+                if (deviceGot.endsWith("\r\n")) {
+                    const QByteArray line = deviceGot.trimmed();
+                    deviceGot.clear();
+                    sawPing = sawPing || line.contains("PING");
+                    sawCmd42 = sawCmd42 || line.contains("CMD 42");
+                    if (line == "PING")
+                        peer->write("ACK\r\n");
+                    else if (line.startsWith("CMD "))
+                        peer->write(QByteArray("OK ") + line.mid(4) + "\r\n");
+                    else if (line == "EXIT")
+                        peer->disconnectFromHost();
+                }
+            });
+        });
+
+        // Everything runs through one Backend, exactly like the GUI app:
+        // its own comm, its own sequence table, its own script runner.
+        Backend backend;
+        SequenceModel *sequences = backend.sequences();
+        sequences->add({{"name", "Ping"}, {"isSend", true}, {"format", 0}, {"data", "PING\r\n"}});
+        sequences->add({{"name", "Command"}, {"isSend", true}, {"format", 0},
+                        {"data", "CMD ??\r\n"}, {"hotkey", 5}});
+        sequences->add({{"name", "GotAck"}, {"isSend", false}, {"format", 0},
+                        {"data", "ACK"}, {"comment", "Got ACK: %_S"}});
+        sequences->add({{"name", "GotOk"}, {"isSend", false}, {"format", 0},
+                        {"data", "OK #"}, {"trigger", true}, {"replyToId", 1}});
+        sequences->add({{"name", "Reply"}, {"isSend", true}, {"format", 0}, {"data", "BYE\r\n"}});
+        ScriptRunner *runner = backend.scripts();
+        bool finished = false;
+        bool ok = false;
+        QString error;
+        QEventLoop loop;
+        QTimer::singleShot(20000, &loop, &QEventLoop::quit);
+        connect(runner, &ScriptRunner::finished, [&](bool success, const QString &err) {
+            finished = true;
+            ok = success;
+            error = err;
+            loop.quit();
+        });
+
+        QTemporaryDir dir;
+        const QString logBase = dir.path() + "/session";
+        backend.channelA()->setDevice(QStringLiteral("TCP:127.0.0.1:%1").arg(port));
+        QVERIFY(backend.comm()->start(backend.channelA()->config(), backend.channelB()->config()));
+        runner->run(QStringLiteral(
+            "DL.Comment('status=' + DL.GetChannelStatus(1));"
+            "DL.Assert(DL.GetChannelStatus(1) === 1, 'channel open got ' + DL.GetChannelStatus(1));"
+            "DL.Assert(DL.StartLogging('%1', false, 'AH', 0, false), 'logging started');"
+            "DL.ResetReceiveCounter();"
+            "DL.SendSequence('Ping');"
+            "DL.Assert(DL.WaitForSequence('GotAck', 1, 3000) >= 1, 'no ACK');"
+            "DL.Assert(DL.GetReceiveCounter('GotAck') === 1, 'counter one');"
+            "DL.SendSequence('Command', '42');"
+            "DL.Assert(DL.WaitForSequence('GotOk', 1, 3000) >= 1, 'no OK echo');"
+            "DL.Assert(DL.CalcChecksum('MOD256', 'PING', 'A') === '2E', 'checksum');"
+            "var f = FileOutput('%2', false);"
+            "f.writeLine('session done'); f.close();"
+            "DL.StopLogging();"
+            "DL.DirectSend(3, 'side says hi');"
+            "DL.Comment('scenario finished');").arg(logBase, dir.path() + "/out.txt"));
+        QTRY_VERIFY_WITH_TIMEOUT(finished, 20000);
+        QVERIFY2(ok, qPrintable(error));
+        backend.comm()->stop();
+
+        // The device saw the real bytes of both sequences (deviceGot holds
+        // the tail after the last complete line; track totals separately).
+        QVERIFY(sawPing);
+        QVERIFY(sawCmd42);
+
+        // The _asc log file holds the session.
+        QFile asc(logBase + "_asc.txt");
+        QVERIFY(asc.exists());
+        QVERIFY(asc.open(QIODevice::ReadOnly));
+        const QString ascText = QString::fromUtf8(asc.readAll());
+        QVERIFY(ascText.contains("PING"));
+        QVERIFY(ascText.contains("CMD 42"));
+
+        QFile out(dir.path() + "/out.txt");
+        QVERIFY(out.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(out.readAll()).trimmed(), QString("session done"));
+    }
+
     void portSettingsReachTheLine()
     {
         // The pty carries the termios state both ends share, so the master

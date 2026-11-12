@@ -1,6 +1,7 @@
 #include "dlscript.h"
 
 #include <QBuffer>
+#include <QMetaMethod>
 #include <QDateTime>
 #include <QDir>
 #include <QRegularExpression>
@@ -107,10 +108,15 @@ void DLScriptEngine::processReceiveEvents() {
 QVariant DLScriptEngine::callBridge(const char *method, const QVariantList &args) {
     if (!m_bridge)
         return {};
+    // One queue-safe dispatcher on the bridge; the typed script* methods stay
+    // internal to the backend.
     QVariant result;
-    QMetaObject::invokeMethod(m_bridge, method, Qt::BlockingQueuedConnection,
+    const bool ok = QMetaObject::invokeMethod(m_bridge, "scriptInvoke", Qt::BlockingQueuedConnection,
                               Q_RETURN_ARG(QVariant, result),
+                              Q_ARG(QString, QLatin1String(method)),
                               Q_ARG(QVariantList, args));
+    if (!ok)
+        qWarning() << "callBridge: invoke failed for" << method;
     return result;
 }
 
@@ -572,8 +578,9 @@ int DLObject::WaitForSequence(const QJSValue &nameOrIndex, int maxCounter, int t
     // Snapshot receive sequences carry their id; resolve the counter through
     // the bridge (main thread owns the counters).
     int seqId = entry->id;
-    const int start = m_host->callBridge("scriptReceiveCount", {seqId}).toInt();
-    const int target = maxCounter < 0 ? -1 : start + maxCounter;
+    // Docklight counts hits since communication start or the last counter
+    // reset, so maxCounter is an absolute limit, not a delta.
+    const int target = maxCounter;
 
     const QByteArray bytes = entry->bytes;
     const QVector<bool> wildcard = entry->wildcard;
@@ -614,12 +621,12 @@ int DLObject::WaitForSequence(const QJSValue &nameOrIndex, int maxCounter, int t
         [&]() {
             localSearch();
             if (!m_host->m_bridge)
-                return target < 0 ? false : start + hits >= target;
+                return target < 0 ? false : hits >= target;
             const int count = m_host->callBridge("scriptReceiveCount", {seqId}).toInt();
             return target < 0 ? false : count >= target;
         },
         timeout);
-    int count = start + hits;
+    int count = hits;
     if (m_host->m_bridge)
         count = qMax(count, m_host->callBridge("scriptReceiveCount", {seqId}).toInt());
     return count;
@@ -1016,12 +1023,13 @@ void DLObject::SaveProgramOptions(const QString &filePathName) {
     m_host->callBridge("scriptSaveOptions", {path});
 }
 
-void DLObject::StartLogging(const QString &baseFilePath, bool appendData,
+bool DLObject::StartLogging(const QString &baseFilePath, bool appendData,
                             const QString &representations, int format, bool highspeed,
                             bool noHeaders) {
     Q_UNUSED(highspeed)
-    m_host->callBridge("scriptStartLogging",
-               {baseFilePath, appendData, representations, format, noHeaders});
+    return m_host->callBridge("scriptStartLogging",
+                              {baseFilePath, appendData, representations, format, noHeaders})
+        .toBool();
 }
 
 void DLObject::StopLogging() {
