@@ -11,23 +11,36 @@ flow, poke the device, automate the whole conversation with a script.
 - **Serial terminal** — open any `/dev/ttyUSB*`, `/dev/ttyACM*`, `/dev/ttyS*`,
   `/dev/ttyAMA*` (or a by-id path) at 300…4000000 baud, 5–8 data bits,
   none/even/odd/mark/space parity, 1–2 stop bits, no/RTS-CTS/Xon-Xoff flow.
-  Implemented directly on POSIX termios, so it only needs Qt.
+  Implemented directly on POSIX termios, so it only needs Qt. **Network
+  channels** work the same way: `TCP:host:port` (client), `SERVER:port`
+  (accepts one connection), `UDP:host:port` and `UDP:port` — type them into
+  the device field.
 - **Three communication modes**, like Docklight:
   - *Single* — one port, send and receive.
   - *Redirect* — transmit on port A, receive the reply on port B.
   - *Monitor* — two read-only taps between two devices, color-coded by side.
 - **Communication window** — every burst timestamped, tagged RX/TX (+A/B in
-  monitor mode), shown as Text, Hex, or Decimal. Freeze the view while data
-  keeps flowing, search with glowing matches, copy any line as text or hex,
-  save the whole log.
-- **Send / receive sequences** — named snippets in Text/Hex/Dec notation,
-  bound to **F1–F12** so they fire anywhere, optional auto-repeat, and
-  **receive triggers**: a receive pattern (with `??` wildcards) that fires a
-  send sequence the moment it shows up in the stream.
+  monitor mode), shown as ASCII, HEX, DEC, or **Binary** (Ctrl+Tab cycles).
+  Contents filter (all / channel 1 / channel 2 / comments), optional
+  control-character names (`<CR><LF>`), pause-detection stamps. Freeze the
+  view while data keeps flowing, search with glowing matches, copy any line
+  as text or hex, save the whole log.
+- **Send / receive sequences** — named snippets in Text/Hex/Dec/Binary
+  notation with wildcard parameters, function characters (`&` delay, `%`
+  break, `!` handshake), **checksum areas** (MOD256, XOR, LRC, CRC-8/16/32,
+  MODBUS, CCITT… or a generic CRC spec), bound to **F1–F12** so they fire
+  anywhere, optional auto-repeat, and **receive triggers**: a receive
+  pattern (with `?`/`#` wildcards and checksum validation) that answers,
+  comments with `%_` macros, snapshots, or stops the run.
 - **Scripting** — JavaScript with a `DL` object that mirrors Docklight's
-  VBScript API (below). Blocking `DL.Receive*` calls park the script, never
-  the UI; a runaway script is always stoppable. Editor with highlighting,
-  line numbers, and an output pane.
+  VBScript API: `SendSequence`, `WaitForSequence`, `DirectSend`,
+  `CalcChecksum`, `ConvertSequenceData`, channel settings, handshake
+  signals, `OnSend_`/`OnReceive_` event procedures, `MsgBox2`/`InputBox2`,
+  file logging (`_asc/_hex/_dec/_bin` as txt/htm/rtf), FileInput/FileOutput,
+  side channels 3–10, and more. Blocking `DL.Receive*` calls park the
+  script, never the UI; a runaway script is always stoppable. Editor with
+  highlighting, line numbers, and an output pane. Scripts can auto-run when
+  a project opens.
 - **Agent-friendly** — the same engine runs headless with NDJSON output,
   exit codes, and test verdicts (`DL.Assert`/`DL.Fail`), and a bundled agent
   skill: `lucidlight skill install`.
