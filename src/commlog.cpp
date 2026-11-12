@@ -53,6 +53,30 @@ void CommLog::setChannelFilter(int filter) {
     emit filterChanged();
 }
 
+int CommLog::findNext(const QString &text, int fromRow) const {
+    if (text.isEmpty() || m_rows.isEmpty())
+        return -1;
+    const QString needle = text.trimmed();
+    const int viewCount = filteredCount();
+    if (viewCount == 0)
+        return -1;
+    auto contains = [&](int viewRow) {
+        const int physical = physicalRow(viewRow);
+        if (physical < 0)
+            return false;
+        const Row &row = m_rows.at(physical);
+        return row.text.contains(needle, Qt::CaseInsensitive)
+               || row.hex.contains(needle, Qt::CaseInsensitive);
+    };
+    const int start = fromRow + 1;
+    for (int step = 0; step < viewCount; ++step) {
+        const int viewRow = (start + step) % viewCount;
+        if (contains(viewRow))
+            return viewRow;
+    }
+    return -1;
+}
+
 int CommLog::physicalRow(int viewRow) const {
     if (viewRow < 0 || viewRow >= rowCount({}))
         return -1;

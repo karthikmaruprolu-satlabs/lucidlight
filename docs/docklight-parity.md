@@ -21,7 +21,6 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [n/a] Docklight TAP / VTP hardware taps (Windows-only hardware)
 - [n/a] USB HID (needs hidapi; not installed)
 - [~] Named pipes — planned as Unix domain sockets / FIFOs
-- [ ] Side channels (up to 8 extra connections, DL.OpenSideChannel)
 
 ## Serial settings
 - [x] Baud 300..4000000, data bits 5-8, parity none/odd/even/mark/space,
@@ -39,12 +38,11 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [~] Channel 1 / Channel 2 color+style distinction (RXA/TXA/RXB pills)
 - [x] Date/time stamps with ms precision, direction-change stamps
 - [x] Delta time stamps
-- [ ] Clock stamps at fixed interval (Options: "additional date/time stamp")
+- [x] Clock stamps at fixed interval — ⏲ toolbar menu (off/1/5/10/60 s), `backend.clockStampInterval`, full date+time event rows while running
 - [x] Pause detection stamps after configurable silent gap (1 s toolbar
       toggle; the delta column restarts after the gap)
 - [x] Clear log, freeze/log search (Lucidlight extension)
-- [~] Find sequence in communication window — live filter exists (Ctrl+F);
-      Docklight-style find-dialog navigation missing
+- [x] Find in communication window — Ctrl+F field with live highlight + Enter/"Next" jumps row to row (wraps), found row highlighted
 - [ ] Copy/paste per row exists via context menu; full-window print missing
 
 ## Sequences

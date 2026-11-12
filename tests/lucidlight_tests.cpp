@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <QRegularExpression>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
@@ -1514,6 +1515,52 @@ private slots:
 
         backend.comm()->stop();
         ::close(master);
+    }
+
+    void clockStampsAtFixedInterval()
+    {
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        backend.setClockStampInterval(1);   // every second
+        QCOMPARE(backend.clockStampInterval(), 1);
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        // Two stamps need ~2 s; give it 3 s.
+        QTest::qWait(3000);
+        int stamps = 0;
+        for (int i = 0; i < backend.log()->count(); ++i) {
+            const QString text = backend.log()->textAt(i);
+            if (QRegularExpression("^\\d{4}-\\d{2}-\\d{2} \\d{2}:").match(text).hasMatch())
+                ++stamps;
+        }
+        QVERIFY2(stamps >= 2, qPrintable(QString("stamps=%1").arg(stamps)));
+
+        // Turning the interval off stops the stamps; the timer must not
+        // survive communication stop either.
+        backend.setClockStampInterval(0);
+        backend.comm()->stop();
+        ::close(master);
+    }
+
+    void findNavigatesThroughLog()
+    {
+        Backend backend;
+        backend.log()->append(CommLog::Rx, 0, "alpha beta", false);
+        backend.log()->append(CommLog::Rx, 0, "gamma delta", false);
+        backend.log()->append(CommLog::Tx, 0, "alpha again", false);
+        backend.log()->append(CommLog::Rx, 0, "beta one", false);
+
+        QCOMPARE(backend.log()->findNext("alpha", -1), 0);
+        QCOMPARE(backend.log()->findNext("alpha", 0), 2);
+        QCOMPARE(backend.log()->findNext("alpha", 2), 0);   // wraps around
+        QCOMPARE(backend.log()->findNext("BETA", 0), 3);    // case-insensitive, hex too
+        QCOMPARE(backend.log()->findNext("nonexistent", -1), -1);
+        QCOMPARE(backend.log()->findNext("", -1), -1);
     }
 
     void commentMacrosExpandOnMatch()

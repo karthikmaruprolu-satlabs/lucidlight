@@ -41,6 +41,10 @@ Backend::Backend(QObject *parent)
             m_repeatClock.start();
             m_nextRepeatAt.clear();
             m_matcher.reset();
+            if (m_clockStampInterval > 0)
+                m_clockTimer.start(m_clockStampInterval * 1000);
+        } else {
+            m_clockTimer.stop();
         }
         emit stateChanged();
     });
@@ -52,6 +56,13 @@ Backend::Backend(QObject *parent)
 
     m_repeatTimer.setInterval(100);
     connect(&m_repeatTimer, &QTimer::timeout, this, &Backend::checkRepeats);
+
+    // Docklight's "additional date/time stamp": a full stamp into the
+    // communication window every N seconds while communication runs.
+    connect(&m_clockTimer, &QTimer::timeout, this, [this] {
+        logEvent(QDateTime::currentDateTime().toString(
+                     QStringLiteral("yyyy-MM-dd hh:mm:ss.zzz")));
+    });
 
     // Everything below marks the project dirty, so an unsaved-changes prompt
     // can appear before quitting.
@@ -97,6 +108,17 @@ QString Backend::commStateText() const {
 
 bool Backend::runOnOpen() const {
     return m_runOnOpen;
+}
+
+void Backend::setClockStampInterval(int seconds) {
+    if (seconds == m_clockStampInterval)
+        return;
+    m_clockStampInterval = qMax(0, seconds);
+    if (m_clockStampInterval > 0 && m_comm->running())
+        m_clockTimer.start(m_clockStampInterval * 1000);
+    else
+        m_clockTimer.stop();
+    emit clockStampChanged();
 }
 
 void Backend::setRunOnOpen(bool on) {
@@ -339,6 +361,8 @@ void Backend::toggleComm() {
         m_repeatTimer.start();
         m_repeatClock.start();
         m_nextRepeatAt.clear();
+        if (m_clockStampInterval > 0)
+            m_clockTimer.start(m_clockStampInterval * 1000);
     } else {
         emit toast(m_comm->link(0)->lastError());
     }
@@ -436,6 +460,7 @@ void Backend::checkRepeats() {
         if (!m_nextRepeatAt.isEmpty())
             m_nextRepeatAt.clear();
         m_repeatTimer.stop();
+        m_clockTimer.stop();
         return;
     }
     const qint64 now = m_repeatClock.elapsed();

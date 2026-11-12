@@ -24,6 +24,8 @@ class CommLog : public QAbstractListModel {
     // Docklight's pause detection: after this many ms of silence, the next
     // line gets a fresh time stamp. 0 disables it.
     Q_PROPERTY(int pauseStampMs READ pauseStampMs WRITE setPauseStampMs NOTIFY displayChanged)
+    // Row the find navigation currently points at (view row), -1 = none.
+    Q_PROPERTY(int currentFindRow READ currentFindRow WRITE setCurrentFindRow NOTIFY findRowChanged)
     Q_PROPERTY(DataFormat::Format displayFormat READ displayFormat WRITE setDisplayFormat NOTIFY displayChanged)
 
 public:
@@ -67,6 +69,19 @@ public:
     void setDisplayFormat(DataFormat::Format format);
     Q_INVOKABLE void setSearchText(const QString &text);
 
+    // Docklight-style find: returns the next view row (starting after
+    // fromRow, wrapping around) whose text or hex data contains the search
+    // text case-insensitively, or -1.
+    Q_INVOKABLE int findNext(const QString &text, int fromRow) const;
+
+    int currentFindRow() const { return m_currentFindRow; }
+    void setCurrentFindRow(int row) {
+        if (row != m_currentFindRow) {
+            m_currentFindRow = row;
+            emit findRowChanged();
+        }
+    }
+
     void startClock();
     void append(Direction direction, int channel, const QByteArray &data, bool highlighted = false);
     void appendComment(const QString &text);
@@ -109,6 +124,7 @@ signals:
     void frozenChanged();
     void displayChanged();
     void filterChanged();
+    void findRowChanged();
 
 private:
     void flushPending();
@@ -118,6 +134,7 @@ private:
     qint64 m_startMs = 0;
     bool m_frozen = false;
     int m_channelFilter = 0;
+    int m_currentFindRow = -1;
     bool m_showControlNames = false;
     int m_pauseStampMs = 0;
     // Recomputes every row's text from the raw data (after a view switch).

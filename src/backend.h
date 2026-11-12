@@ -38,6 +38,9 @@ class Backend : public QObject {
     Q_PROPERTY(QString scriptSource READ scriptSource WRITE setScriptSource NOTIFY scriptChanged)
     // Docklight's project option: run the script when the project opens.
     Q_PROPERTY(bool runOnOpen READ runOnOpen WRITE setRunOnOpen NOTIFY stateChanged)
+    // Docklight's "additional date/time stamp": period in seconds for the
+    // clock stamps written into the communication window, 0 = off.
+    Q_PROPERTY(int clockStampInterval READ clockStampInterval WRITE setClockStampInterval NOTIFY clockStampChanged)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -61,6 +64,8 @@ public:
     void setScriptSource(const QString &source);
     bool runOnOpen() const;
     void setRunOnOpen(bool on);
+    int clockStampInterval() const { return m_clockStampInterval; }
+    void setClockStampInterval(int seconds);
     void runScriptFile(const QString &path);
     // Runs script text directly (the script panel calls scripts.run).
     Q_INVOKABLE void runScript(const QString &source);
@@ -129,6 +134,7 @@ public slots:
                       bool input, const QString &defaultText);
 
 signals:
+    void clockStampChanged();
     void stateChanged();
     void scriptChanged();
     void toast(const QString &text);
@@ -188,6 +194,8 @@ private:
     QStringList m_receiveComments;     // drained by DL.GetReceiveComments
 
     QTimer m_repeatTimer;
+    QTimer m_clockTimer;
+    int m_clockStampInterval = 0;   // seconds, 0 = off
     QHash<int, qint64> m_nextRepeatAt;
     QElapsedTimer m_repeatClock;
 };

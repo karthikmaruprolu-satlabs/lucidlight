@@ -273,6 +273,42 @@ ApplicationWindow {
                 ToolTip.text: qsTr("Timestamps")
                 ToolTip.delay: 600
             }
+            // Docklight's "additional date/time stamp": a full stamp into
+            // the communication window every N seconds, 0 = off.
+            ToolButton {
+                id: clockStampButton
+                text: "⏲"
+                font.pixelSize: 14
+                onClicked: clockStampMenu.popup(clockStampButton, 0, clockStampButton.height)
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Clock stamp every N seconds (currently: %1)").arg(
+                    backend.clockStampInterval > 0 ? qsTr("%1 s").arg(backend.clockStampInterval)
+                                                   : qsTr("off"))
+                ToolTip.delay: 600
+                Menu {
+                    id: clockStampMenu
+                    MenuItem {
+                        text: qsTr("Off")
+                        onTriggered: backend.clockStampInterval = 0
+                    }
+                    MenuItem {
+                        text: qsTr("Every 1 second")
+                        onTriggered: backend.clockStampInterval = 1
+                    }
+                    MenuItem {
+                        text: qsTr("Every 5 seconds")
+                        onTriggered: backend.clockStampInterval = 5
+                    }
+                    MenuItem {
+                        text: qsTr("Every 10 seconds")
+                        onTriggered: backend.clockStampInterval = 10
+                    }
+                    MenuItem {
+                        text: qsTr("Every 60 seconds")
+                        onTriggered: backend.clockStampInterval = 60
+                    }
+                }
+            }
             ToolButton {
                 id: pauseStampButton
                 checkable: true
@@ -358,11 +394,35 @@ ApplicationWindow {
                 Layout.preferredWidth: 320
                 placeholderText: qsTr("Search in data…")
                 font.pixelSize: 13
-                onTextChanged: backend.log.setSearchText(text)
+                onTextChanged: {
+                    backend.log.setSearchText(text);
+                    backend.log.currentFindRow = -1;
+                    findNextButton.enabled = text !== "";
+                }
                 Keys.onEscapePressed: win.searchVisible = false
+                Keys.onReturnPressed: (event) => findNextButton.doFind()
+                Keys.onEnterPressed: (event) => findNextButton.doFind()
+            }
+            Button {
+                id: findNextButton
+                flat: true
+                text: qsTr("Next ⏎")
+                font.pixelSize: 12
+                enabled: searchField.text !== ""
+                function doFind() {
+                    const row = backend.log.findNext(searchField.text, backend.log.currentFindRow);
+                    if (row >= 0) {
+                        backend.log.currentFindRow = row;
+                        commView.positionViewAtIndex(row, ListView.Contain);
+                        findStatusLabel.text = "";
+                    } else {
+                        findStatusLabel.text = qsTr("No match");
+                    }
+                }
+                onClicked: doFind()
             }
             Label {
-                text: qsTr("Matches glow in yellow")
+                id: findStatusLabel
                 color: theme.muted
                 font.pixelSize: 12
             }
@@ -428,9 +488,19 @@ ApplicationWindow {
                             onContentYChanged: atEnd = atYEnd
                             onCountChanged: if (atEnd) positionViewAtEnd()
 
-                            delegate: CommRow {
+                            delegate: Item {
                                 width: commView.width
-                                onContextMenuRequested: (row) => rowMenu.popupAt(row)
+                                height: rowDelegate.height
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: Qt.alpha(theme.accent, 0.22)
+                                    visible: index === backend.log.currentFindRow
+                                }
+                                CommRow {
+                                    id: rowDelegate
+                                    width: parent.width
+                                    onContextMenuRequested: (row) => rowMenu.popupAt(row)
+                                }
                             }
 
                             // The empty-state hint.
