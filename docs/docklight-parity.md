@@ -35,7 +35,8 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [x] Control character names (<CR><LF><NUL>...) in ASCII view, toolbar toggle
 - [x] Contents filter: all / channel 1 / channel 2 / comments only
       (+ DL.SetContentsFilter via bridge)
-- [~] Channel 1 / Channel 2 color+style distinction (RXA/TXA/RXB pills)
+- [x] Channel 1 / Channel 2 color distinction (RXA/TXA/RXB pills): RX1 green,
+      RX2 cyan, TX1 blue, TX2 magenta, both badge and data text
 - [x] Date/time stamps with ms precision, direction-change stamps
 - [x] Delta time stamps
 - [x] Clock stamps at fixed interval — ⏲ toolbar menu (off/1/5/10/60 s), `backend.clockStampInterval`, full date+time event rows while running

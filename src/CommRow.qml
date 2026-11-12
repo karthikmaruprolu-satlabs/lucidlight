@@ -80,9 +80,9 @@ Item {
             radius: Math.min(3, theme.radius + 1)
             color: {
                 if (root.direction === 0)
-                    return Qt.alpha(theme.green, 0.15);
+                    return Qt.alpha(root.channel === 1 ? theme.cyan : theme.green, 0.15);
                 if (root.direction === 1)
-                    return Qt.alpha(theme.blue, 0.18);
+                    return Qt.alpha(root.channel === 1 ? theme.magenta : theme.blue, 0.18);
                 return "transparent";
             }
             Label {
@@ -94,7 +94,13 @@ Item {
                         return "TX" + (root.channel >= 0 ? String.fromCharCode(65 + root.channel) : "");
                     return "·";
                 }
-                color: root.direction === 0 ? theme.green : root.direction === 1 ? theme.blue : theme.muted
+                color: {
+                    if (root.direction === 0)
+                        return root.channel === 1 ? theme.cyan : theme.green;
+                    if (root.direction === 1)
+                        return root.channel === 1 ? theme.magenta : theme.blue;
+                    return theme.muted;
+                }
                 font.family: win.monoFont
                 font.pixelSize: 10
                 font.weight: Font.DemiBold
@@ -108,9 +114,11 @@ Item {
                 if (root.comment)
                     return theme.yellow;
                 if (root.direction === 0)
-                    return Qt.lighter(theme.green, 1.15);
+                    return root.channel === 1 ? Qt.lighter(theme.cyan, 1.1)
+                                              : Qt.lighter(theme.green, 1.15);
                 if (root.direction === 1)
-                    return Qt.lighter(theme.blue, 1.2);
+                    return root.channel === 1 ? Qt.lighter(theme.magenta, 1.15)
+                                              : Qt.lighter(theme.blue, 1.2);
                 return theme.fg;
             }
             font.family: win.monoFont
