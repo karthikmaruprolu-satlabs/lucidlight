@@ -1162,6 +1162,82 @@ private slots:
         manager.stop();
     }
 
+    void sideChannelSendsAndReceives()
+    {
+        // A side channel is a real connection: a TCP side channel delivers
+        // to a peer and DirectSend routes 3..10 to it.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        const quint16 port = server.serverPort();
+        QByteArray got;
+        QEventLoop loop;
+        QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+        connect(&server, &QTcpServer::newConnection, &server, [&] {
+            QTcpSocket *peer = server.nextPendingConnection();
+            connect(peer, &QAbstractSocket::readyRead, peer, [peer, &got, &loop] {
+                got += peer->readAll();
+                if (got.contains("side"))
+                    loop.quit();
+            });
+        });
+
+        CommManager manager;
+        SerialConfig a, b;
+        a.device = "/dev/null";   // unused here
+        QVERIFY(manager.start(a, b));
+        QVERIFY(manager.openSideChannel(3, QStringLiteral("TCP:127.0.0.1:%1").arg(port)));
+        QVERIFY(manager.sideChannelOpen(3));
+        QVERIFY(manager.sideSend(3, "side"));
+        loop.exec();
+        QVERIFY(got.contains("side"));
+
+        manager.closeSideChannel(3);
+        QVERIFY(!manager.sideChannelOpen(3));
+        manager.stop();
+    }
+
+    void scriptOpensSideChannelAndSends()
+    {
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        const quint16 port = server.serverPort();
+        QByteArray got;
+        QEventLoop loop;
+        QTimer::singleShot(5000, &loop, &QEventLoop::quit);
+        connect(&server, &QTcpServer::newConnection, &server, [&] {
+            QTcpSocket *peer = server.nextPendingConnection();
+            connect(peer, &QAbstractSocket::readyRead, peer, [peer, &got, &loop] {
+                got += peer->readAll();
+                if (got.contains("scripted"))
+                    loop.quit();
+            });
+        });
+
+        CommManager manager;
+        SequenceModel sequences;
+        Backend backend;
+        Q_UNUSED(backend)
+        ScriptRunner runner(&manager, &sequences, nullptr);
+        bool finished = false;
+        bool ok = false;
+        QString error;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &err) {
+            finished = true;
+            ok = success;
+            error = err;
+            loop.quit();
+        });
+        SerialConfig a, b;
+        a.device = "/dev/null";
+        manager.start(a, b);
+        runner.run(QStringLiteral(
+            "DL.Assert(DL.OpenSideChannel(4, 'TCP:127.0.0.1:%1'), 'side open');"
+            "DL.Assert(DL.DirectSend(4, 'scripted', 'A'), 'side send');").arg(port));
+        QTRY_VERIFY_WITH_TIMEOUT(finished, 5000);
+        QVERIFY2(ok, qPrintable(error));
+        QVERIFY(got.contains("scripted"));
+    }
+
     void portSettingsReachTheLine()
     {
         // The pty carries the termios state both ends share, so the master

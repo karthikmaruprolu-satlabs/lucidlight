@@ -71,6 +71,8 @@ bool CommManager::start(const SerialConfig &a, const SerialConfig &b) {
 }
 
 void CommManager::stop() {
+    qDeleteAll(m_side);
+    m_side.clear();
     if (!m_running)
         return;
     m_running = false;
@@ -87,6 +89,65 @@ void CommManager::stop() {
 
 bool CommManager::restart() {
     return start(m_lastA, m_lastB);
+}
+
+bool CommManager::openSideChannel(int channelNo, const QString &device) {
+    // Docklight numbers side channels 3..10; indices 2..9 internally.
+    const int index = channelNo - 3;
+    if (index < 0 || index > 7) {
+        emit eventLogged(QObject::tr("Side channel numbers run from 3 to 10"));
+        return false;
+    }
+    if (m_side.contains(index)) {
+        m_side.take(index)->deleteLater();
+    }
+    SerialConfig config;
+    config.device = device;
+    CommLink *link = CommLink::create(device, this);
+    attachSide(link, index);
+    if (!link->open(config)) {
+        link->deleteLater();
+        return false;
+    }
+    m_side[index] = link;
+    emit eventLogged(QObject::tr("Side channel %1 opened on %2").arg(channelNo).arg(device));
+    return true;
+}
+
+void CommManager::closeSideChannel(int channelNo) {
+    const int index = channelNo - 3;
+    if (!m_side.contains(index))
+        return;
+    m_side.take(index)->deleteLater();
+    emit eventLogged(QObject::tr("Side channel %1 closed").arg(channelNo));
+}
+
+bool CommManager::sideSend(int channelNo, const QByteArray &data) {
+    const int index = channelNo - 3;
+    CommLink *link = m_side.value(index, nullptr);
+    if (!link || !link->isOpen())
+        return false;
+    const qint64 written = link->write(data);
+    return written == data.size();
+}
+
+bool CommManager::sideChannelOpen(int channelNo) const {
+    const CommLink *link = m_side.value(channelNo - 3, nullptr);
+    return link && link->isOpen();
+}
+
+void CommManager::attachSide(CommLink *link, int index) {
+    // Side channel data flows into the normal incoming path with its channel
+    // number, 2..9, so the matcher and log see it like any other line.
+    connect(link, &CommLink::received, this,
+            [this, index](const QByteArray &data) { handleIncoming(index + 2, data); });
+    connect(link, &CommLink::stateChanged, this, [this, link, index] {
+        if (!link->isOpen() && !m_side.contains(index))
+            return;
+        if (!link->isOpen())
+            emit eventLogged(QObject::tr("Side channel %1 disconnected").arg(index + 3));
+        emit runningChanged();
+    });
 }
 
 void CommManager::sendBreak(int durationMs) {

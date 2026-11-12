@@ -373,12 +373,37 @@ bool DLObject::DirectSend(int channelNo, const QString &customSequence,
         m_host->m_lastError = parsed.error;
         return false;
     }
+    if (channelNo >= 3 && channelNo <= 10) {
+        bool sent = false;
+        QMetaObject::invokeMethod(m_host->m_comm, "sideSend", Qt::BlockingQueuedConnection,
+                                  Q_RETURN_ARG(bool, sent), Q_ARG(int, channelNo),
+                                  Q_ARG(QByteArray, parsed.bytes()));
+        return sent;
+    }
     const int channel = qBound(1, channelNo, 2) - 1;
     bool sent = false;
     QMetaObject::invokeMethod(m_host->m_comm, "sendOn", Qt::BlockingQueuedConnection,
                               Q_RETURN_ARG(bool, sent), Q_ARG(int, channel),
                               Q_ARG(QByteArray, parsed.bytes()));
     return sent;
+}
+
+// DL.OpenSideChannel channelNo, device — side channels 3..10.
+bool DLObject::OpenSideChannel(int channelNo, const QString &device) {
+    if (!m_host->m_comm || channelNo < 3 || channelNo > 10)
+        return false;
+    bool opened = false;
+    QMetaObject::invokeMethod(m_host->m_comm, "openSideChannel", Qt::BlockingQueuedConnection,
+                              Q_RETURN_ARG(bool, opened), Q_ARG(int, channelNo),
+                              Q_ARG(QString, device));
+    return opened;
+}
+
+void DLObject::CloseSideChannel(int channelNo) {
+    if (!m_host->m_comm)
+        return;
+    QMetaObject::invokeMethod(m_host->m_comm, "closeSideChannel", Qt::BlockingQueuedConnection,
+                              Q_ARG(int, channelNo));
 }
 
 void DLObject::SendBreak(int durationMs) {

@@ -167,6 +167,9 @@ public:
                                   const QString &representation = QStringLiteral("A"));
     Q_INVOKABLE bool DirectSend(int channelNo, const QString &customSequence,
                                 const QString &representation = QStringLiteral("A"));
+    // Side channels 3..10, Docklight's extra scripting connections.
+    Q_INVOKABLE bool OpenSideChannel(int channelNo, const QString &device);
+    Q_INVOKABLE void CloseSideChannel(int channelNo);
     Q_INVOKABLE void SendBreak(int durationMs = 200);
     // Docklight: DL.SetHandshakeSignals rts, dtr — plus bit-coded reader.
     Q_INVOKABLE void SetHandshakeSignals(bool rts, bool dtr);

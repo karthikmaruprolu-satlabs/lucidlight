@@ -124,7 +124,9 @@ not source-compatible, but the DL API names and semantics are replicated.
 - [x] FileOutput: create/append, text + binary, Close
 
 ### Side channels
-- [ ] DL.OpenSideChannel / DL.CloseSideChannel / DL.DirectSend channelNo 3..10
+- [x] DL.OpenSideChannel / DL.CloseSideChannel / DL.DirectSend channelNo 3..10
+      (serial or network devices; side-channel data flows into the incoming
+      path with channel numbers 2..9)
 
 ## VBScript basics (JS equivalents)
 - [x] Conversions Asc/Chr/HexToStr/StrToHex/HexToDec/DecToHex

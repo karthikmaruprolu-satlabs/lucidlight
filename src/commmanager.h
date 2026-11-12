@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QHash>
 #include <atomic>
 
 #include "commlink.h"
@@ -45,6 +46,13 @@ public:
     // Direct writes for scripted pin-and-break games; bypasses mode routing.
     Q_INVOKABLE bool sendOn(int channel, const QByteArray &data);
     Q_INVOKABLE void sendBreak(int durationMs);
+
+    // Side channels 3..10 (stored as indices 2..9), the Docklight scripting
+    // extra connections. device is any serial or network device string.
+    Q_INVOKABLE bool openSideChannel(int channelNo, const QString &device);
+    Q_INVOKABLE void closeSideChannel(int channelNo);
+    Q_INVOKABLE bool sideSend(int channelNo, const QByteArray &data);
+    Q_INVOKABLE bool sideChannelOpen(int channelNo) const;
     Q_INVOKABLE void setDTR(int channel, bool on);
     Q_INVOKABLE void setRTS(int channel, bool on);
 
@@ -63,9 +71,12 @@ signals:
 private:
     void handleIncoming(int channel, const QByteArray &data);
     void attach(CommLink *link, int channel);
+    void attachSide(CommLink *link, int index);
 
     CommLink *m_a = nullptr;   // owned; created per start() from the device string
     CommLink *m_b = nullptr;
+    // Side channels 3..10 (indices 2..9); each owned while open.
+    QHash<int, CommLink *> m_side;
     std::atomic_bool m_running {false};
     int m_mode = Single;
     qint64 m_txBytes = 0;
