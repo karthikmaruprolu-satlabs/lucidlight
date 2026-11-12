@@ -862,6 +862,48 @@ void Backend::scriptSendSequenceDone() {
     // The worker parks on this counter; nothing else to do here.
 }
 
+// Docklight's F2/F3: continuous logging into the _asc/_hex/_dec/_bin files
+// next to the project. Base name: <project>_<date>_<time>.
+void Backend::startFileLogging() {
+    if (m_logger.active())
+        return;
+    const QString base = projectPath().isEmpty()
+                             ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                             : projectPath();
+    const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    QFileInfo info(base);
+    const QString name = info.completeBaseName().isEmpty()
+                             ? QStringLiteral("lucidlight") : info.completeBaseName();
+    if (m_logger.start(info.absolutePath() + "/" + name + "_" + stamp, false, "AHDB", 0, false))
+        emit stateChanged();
+    else
+        emit toast(tr("Cannot start logging"));
+}
+
+void Backend::stopFileLogging() {
+    if (!m_logger.active())
+        return;
+    m_logger.stop();
+    emit stateChanged();
+}
+
+bool Backend::fileLogging() const {
+    return m_logger.active();
+}
+
+void Backend::saveScriptTo(const QString &path) {
+    if (path.isEmpty())
+        return;
+    const QString finalPath = path.endsWith(".js", Qt::CaseInsensitive) ? path : path + ".js";
+    QFile file(finalPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        emit toast(tr("Cannot write %1").arg(finalPath));
+        return;
+    }
+    file.write(m_scriptSource.toUtf8());
+    emit toast(tr("Script saved to %1").arg(finalPath));
+}
+
 void Backend::runScript(const QString &source) {
     if (source.trimmed().isEmpty())
         return;

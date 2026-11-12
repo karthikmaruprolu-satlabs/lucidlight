@@ -21,6 +21,9 @@ class CommLog : public QAbstractListModel {
     Q_PROPERTY(int channelFilter READ channelFilter WRITE setChannelFilter NOTIFY filterChanged)
     // Docklight's "control characters" view option for the ASCII view.
     Q_PROPERTY(bool showControlNames READ showControlNames WRITE setShowControlNames NOTIFY displayChanged)
+    // Docklight's pause detection: after this many ms of silence, the next
+    // line gets a fresh time stamp. 0 disables it.
+    Q_PROPERTY(int pauseStampMs READ pauseStampMs WRITE setPauseStampMs NOTIFY displayChanged)
     Q_PROPERTY(DataFormat::Format displayFormat READ displayFormat WRITE setDisplayFormat NOTIFY displayChanged)
 
 public:
@@ -57,6 +60,8 @@ public:
     void setShowDelta(bool on);
     bool showControlNames() const { return m_showControlNames; }
     void setShowControlNames(bool on);
+    int pauseStampMs() const { return m_pauseStampMs; }
+    void setPauseStampMs(int ms);
     int channelFilter() const { return m_channelFilter; }
     void setChannelFilter(int filter);
     void setDisplayFormat(DataFormat::Format format);
@@ -114,6 +119,7 @@ private:
     bool m_frozen = false;
     int m_channelFilter = 0;
     bool m_showControlNames = false;
+    int m_pauseStampMs = 0;
     // Recomputes every row's text from the raw data (after a view switch).
     void rerender();
     bool m_showTimestamps = true;

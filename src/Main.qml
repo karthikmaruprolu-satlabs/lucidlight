@@ -58,6 +58,16 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+Shift+S"; context: Qt.ApplicationShortcut; onActivated: saveLog() }
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; enabled: !focusInTextField(); onActivated: helpVisible = !helpVisible }
     Shortcut { sequence: "Ctrl+Q"; context: Qt.ApplicationShortcut; onActivated: win.close() }
+    // Docklight function-key map: F5/F6 communication, F2/F3 logging,
+    // Shift+F5/F6/F7 script control, Ctrl+T save script.
+    Shortcut { sequence: "F5"; enabled: !focusInTextField(); onActivated: backend.toggleComm() }
+    Shortcut { sequence: "F6"; enabled: !focusInTextField(); onActivated: backend.toggleComm() }
+    Shortcut { sequence: "F2"; enabled: !focusInTextField(); onActivated: if (!backend.fileLogging) backend.startFileLogging() }
+    Shortcut { sequence: "F3"; enabled: !focusInTextField(); onActivated: backend.stopFileLogging() }
+    Shortcut { sequence: "Shift+F5"; onActivated: { bottomBar.currentIndex = 1; scriptPanel.runScript(); } }
+    Shortcut { sequence: "Shift+F6"; onActivated: backend.scripts.stop() }
+    Shortcut { sequence: "Shift+F7"; onActivated: bottomBar.currentIndex = 1 }
+    Shortcut { sequence: "Ctrl+T"; onActivated: saveScript() }
 
     // True when the keyboard focus sits in a text entry, so plain keys must
     // type instead of triggering shortcuts.
@@ -85,6 +95,13 @@ ApplicationWindow {
         picker.openFile(qsTr("Open project"), qsTr("Lucidlight project"), "*.llproj");
     }
 
+    // Ctrl+T: save the script text to a .js file.
+    function saveScript() {
+        pickerFlows.openSave = true;
+        pickerFlows.kind = "script";
+        picker.saveFile(qsTr("Save script"), qsTr("JavaScript"), "*.js", "script.js");
+    }
+
     function saveLog() {
         pickerFlows.openSave = false;
         picker.saveFile(qsTr("Save communication log"), qsTr("Log file"), "*.log", "lucidlight.log");
@@ -106,6 +123,8 @@ ApplicationWindow {
     QtObject {
         id: pickerFlows
         property bool openSave: true
+        // Which artifact the picker is saving: project or script.
+        property string kind: "project"
     }
 
     onClosing: (close) => {
@@ -124,7 +143,10 @@ ApplicationWindow {
                 backend.openProjectFrom(path);
         }
         function onFileSaved(path) {
-            if (pickerFlows.openSave) {
+            if (pickerFlows.openSave && pickerFlows.kind === "script") {
+                if (path !== "")
+                    backend.saveScriptTo(path);
+            } else if (pickerFlows.openSave) {
                 if (path !== "") {
                     backend.saveProjectTo(path);
                     if (quitDialog.opened) {
@@ -249,6 +271,17 @@ ApplicationWindow {
                 onClicked: backend.log.showTimestamps = checked
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("Timestamps")
+                ToolTip.delay: 600
+            }
+            ToolButton {
+                id: pauseStampButton
+                checkable: true
+                checked: backend.log.pauseStampMs > 0
+                text: "⏱"
+                font.pixelSize: 14
+                onClicked: backend.log.pauseStampMs = checked ? 1000 : 0
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Pause detection — after 1 s of silence the delta clock restarts")
                 ToolTip.delay: 600
             }
             ToolButton {

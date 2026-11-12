@@ -141,6 +141,16 @@ void CommLog::setShowControlNames(bool on) {
     rerender();
 }
 
+void CommLog::setPauseStampMs(int ms) {
+    if (ms == m_pauseStampMs)
+        return;
+    m_pauseStampMs = ms;
+    emit displayChanged();
+}
+
+// Docklight's pause stamp: after a configurable silent gap the clock column
+// restarts instead of counting on. Implemented by resetting the delta
+// baseline, which also re-dates the next rows relative to the gap.
 void CommLog::rerender() {
     if (m_rows.isEmpty())
         return;
@@ -188,7 +198,19 @@ void CommLog::append(Direction direction, int channel, const QByteArray &data, b
     row.channel = channel;
     row.data = data;
     row.stampMs = QDateTime::currentMSecsSinceEpoch();
-    row.deltaMs = row.stampMs - m_startMs;
+    // Pause detection: after a silent gap longer than the threshold, restart
+    // the relative clock so the break is visible in the delta column.
+    if (m_pauseStampMs > 0 && !m_rows.isEmpty()) {
+        const qint64 gap = row.stampMs - m_rows.last().stampMs;
+        if (gap >= m_pauseStampMs) {
+            row.deltaMs = gap;
+            m_startMs = row.stampMs;
+        } else {
+            row.deltaMs = row.stampMs - m_startMs;
+        }
+    } else {
+        row.deltaMs = row.stampMs - m_startMs;
+    }
     if (direction == Comment || direction == Event)
         row.text = QString::fromUtf8(data);
     else if (m_format == DataFormat::Format::Text && m_showControlNames)

@@ -31,6 +31,8 @@ class Backend : public QObject {
     Q_PROPERTY(SequenceModel *sequences READ sequences CONSTANT)
     Q_PROPERTY(CommLog *log READ log CONSTANT)
     Q_PROPERTY(ScriptRunner *scripts READ scripts CONSTANT)
+    // Docklight's continuous communication logging (F2 start, F3 stop).
+    Q_PROPERTY(bool fileLogging READ fileLogging NOTIFY stateChanged)
     Q_PROPERTY(PortEnumerator *ports READ ports CONSTANT)
     Q_PROPERTY(PortalPicker *picker READ picker CONSTANT)
     Q_PROPERTY(QString scriptSource READ scriptSource WRITE setScriptSource NOTIFY scriptChanged)
@@ -70,6 +72,7 @@ public:
     Q_INVOKABLE void sendByHotkey(int keyNumber);   // 1..12 for F1..F12
     Q_INVOKABLE void clearLog();
     Q_INVOKABLE void saveLogTo(const QString &path);
+    Q_INVOKABLE void saveScriptTo(const QString &path);
     Q_INVOKABLE void newProject();
     Q_INVOKABLE void openProjectFrom(const QString &path);
     Q_INVOKABLE void saveProjectTo(const QString &path);
@@ -95,6 +98,10 @@ public:
     Q_INVOKABLE void scriptSetContentsFilter(int filter);
     Q_INVOKABLE void scriptSetWindowLayout(const QString &layout);
     Q_INVOKABLE QString scriptCommWindowData(const QString &representation);
+    // UI entry points for the file logger (F2/F3).
+    Q_INVOKABLE void startFileLogging();
+    Q_INVOKABLE void stopFileLogging();
+    Q_INVOKABLE bool fileLogging() const;
     Q_INVOKABLE bool scriptStartLogging(const QString &path, bool appendData,
                                         const QString &representations, int format,
                                         bool noHeaders);

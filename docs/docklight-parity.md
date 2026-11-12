@@ -39,7 +39,8 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [x] Date/time stamps with ms precision, direction-change stamps
 - [x] Delta time stamps
 - [ ] Clock stamps at fixed interval (Options: "additional date/time stamp")
-- [ ] Pause detection stamps after configurable silent gap
+- [x] Pause detection stamps after configurable silent gap (1 s toolbar
+      toggle; the delta column restarts after the gap)
 - [x] Clear log, freeze/log search (Lucidlight extension)
 - [~] Find sequence in communication window — live filter exists (Ctrl+F);
       Docklight-style find-dialog navigation missing
@@ -143,9 +144,9 @@ not source-compatible, but the DL API names and semantics are replicated.
 ## Hot keys (F1 help, Ctrl+N/O/S/P, F5/F6 comm, F2/F3 logging,
 ## Shift+F5/F6/F7 script, Ctrl+T save script, F12/Shift+F12 layout,
 ## Ctrl+F find, Ctrl+W clear, Ctrl+Tab representation, Space send, Ctrl+E edit)
-- [~] F1-F12 sequence hotkeys, Space toggles comm, Ctrl+F/Ctrl+K; remaining
-      Docklight chords (Ctrl+Tab representation cycling, F2/F3 logging,
-      Shift+F5-F7 script control) still to map
+- [x] F1-F12 sequence hotkeys, Space toggles comm, F5/F6 comm, F2/F3 file
+      logging, Shift+F5/F6/F7 script run/stop/panel, Ctrl+T save script,
+      Ctrl+F find, Ctrl+K clear, Ctrl+Tab representation cycling
 
 ## Scripting extras (Lucidlight extensions, documented as such)
 - [x] DL.Send/SendHex/SendStr/SendBytes, DL.Receive/ReceiveStr/ReceiveHex/
