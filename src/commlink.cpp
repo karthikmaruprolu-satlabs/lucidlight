@@ -11,7 +11,8 @@ CommLink::~CommLink() = default;
 bool CommLink::isNetworkDevice(const QString &device) {
     const QString upper = device.toUpper();
     return upper.startsWith(QLatin1String("TCP:")) || upper.startsWith(QLatin1String("SERVER:"))
-           || upper.startsWith(QLatin1String("UDP:"));
+           || upper.startsWith(QLatin1String("UDP:")) || upper.startsWith(QLatin1String("UNIX:"))
+           || upper.startsWith(QLatin1String("UNIXSERVER:"));
 }
 
 CommLink *CommLink::create(const QString &device, QObject *parent) {

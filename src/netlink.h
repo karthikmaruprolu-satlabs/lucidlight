@@ -5,6 +5,8 @@
 
 #include "commlink.h"
 
+class QLocalServer;
+class QLocalSocket;
 class QTcpServer;
 class QTcpSocket;
 class QUdpSocket;
@@ -15,10 +17,12 @@ class QUdpSocket;
 //                    "waiting" until a partner connects, like Docklight)
 //   UDP:host:port  — peer with a fixed remote endpoint
 //   UDP:port       — bound locally, accepts datagrams from anywhere
+//   UNIX:path      — Unix domain socket client
+//   UNIXSERVER:path — Unix domain socket listener (single connection)
 class NetLink : public CommLink {
     Q_OBJECT
 public:
-    enum Kind { TcpClient, TcpServer, UdpPeer, UdpServer };
+    enum Kind { TcpClient, TcpServer, UdpPeer, UdpServer, UnixClient, UnixServer };
 
     explicit NetLink(QObject *parent = nullptr);
     ~NetLink() override;
@@ -48,6 +52,8 @@ private:
     bool m_listening = false;
     QTcpSocket *m_tcp = nullptr;
     QTcpServer *m_server = nullptr;
+    QLocalSocket *m_local = nullptr;
+    QLocalServer *m_localServer = nullptr;
     QUdpSocket *m_udp = nullptr;
     QHostAddress m_peerAddress;
     int m_peerPort = 0;

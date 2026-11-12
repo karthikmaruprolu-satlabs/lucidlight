@@ -20,7 +20,7 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
       (`UDP:port` binds, answers the last sender)
 - [n/a] Docklight TAP / VTP hardware taps (Windows-only hardware)
 - [n/a] USB HID (needs hidapi; not installed)
-- [~] Named pipes — planned as Unix domain sockets / FIFOs
+- [x] Named pipes — Unix domain sockets: `UNIX:/path` (client) and `UNIXSERVER:/path` (single-connection listener), including DL/scripts and side channels
 
 ## Serial settings
 - [x] Baud 300..4000000, data bits 5-8, parity none/odd/even/mark/space,

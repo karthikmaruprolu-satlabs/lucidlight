@@ -1,5 +1,7 @@
 #include "netlink.h"
 
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QUdpSocket>
@@ -77,6 +79,54 @@ bool NetLink::open(const SerialConfig &config) {
         }
         m_listening = true;
         emit stateChanged();   // status: waiting for a partner
+        return true;
+    }
+
+    if (upper.startsWith(QLatin1String("UNIXSERVER:"))) {
+        m_kind = UnixServer;
+        const QString path = m_device.mid(11);
+        if (path.isEmpty()) {
+            fail(QObject::tr("UNIXSERVER device needs a socket path"));
+            return false;
+        }
+        QLocalServer::removeServer(path);   // stale socket file from a crash
+        m_localServer = new QLocalServer(this);
+        connect(m_localServer, &QLocalServer::newConnection, this, [this] {
+            if (m_local)   // one connection at a time
+                return;
+            QLocalSocket *client = m_localServer->nextPendingConnection();
+            if (!client)
+                return;
+            m_local = client;
+            connectSignals();
+            setConnected(true);
+        });
+        if (!m_localServer->listen(path)) {
+            fail(QObject::tr("Cannot listen on %1: %2").arg(path, m_localServer->errorString()));
+            close();
+            return false;
+        }
+        m_listening = true;
+        emit stateChanged();
+        return true;
+    }
+
+    if (upper.startsWith(QLatin1String("UNIX:"))) {
+        m_kind = UnixClient;
+        const QString path = m_device.mid(5);
+        if (path.isEmpty()) {
+            fail(QObject::tr("UNIX device needs a socket path"));
+            return false;
+        }
+        m_local = new QLocalSocket(this);
+        connectSignals();
+        m_local->connectToServer(path);
+        if (!m_local->waitForConnected(3000)) {
+            fail(QObject::tr("UNIX connect to %1 failed: %2").arg(path, m_local->errorString()));
+            close();
+            return false;
+        }
+        setConnected(true);
         return true;
     }
 
@@ -173,6 +223,16 @@ void NetLink::close() {
         m_udp->deleteLater();
         m_udp = nullptr;
     }
+    if (m_local) {
+        m_local->disconnectFromServer();
+        m_local->deleteLater();
+        m_local = nullptr;
+    }
+    if (m_localServer) {
+        m_localServer->close();
+        m_localServer->deleteLater();
+        m_localServer = nullptr;
+    }
     if (wasOpen)
         emit stateChanged();
 }
@@ -204,6 +264,12 @@ void NetLink::handleReadyRead() {
 qint64 NetLink::write(const QByteArray &data) {
     if (!m_connected)
         return -1;
+    if (m_local) {
+        const qint64 written = m_local->write(data);
+        if (written > 0)
+            m_local->flush();
+        return written;
+    }
     if (m_tcp) {
         const qint64 written = m_tcp->write(data);
         if (written > 0)

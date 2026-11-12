@@ -13,7 +13,9 @@ flow, poke the device, automate the whole conversation with a script.
   none/even/odd/mark/space parity, 1–2 stop bits, no/RTS-CTS/Xon-Xoff flow.
   Implemented directly on POSIX termios, so it only needs Qt. **Network
   channels** work the same way: `TCP:host:port` (client), `SERVER:port`
-  (accepts one connection), `UDP:host:port` and `UDP:port` — type them into
+  (accepts one connection), `UDP:host:port`, `UDP:port`, plus local Unix
+  domain sockets `UNIX:/path` (client) and `UNIXSERVER:/path` (listener) —
+  type them into
   the device field.
 - **Three communication modes**, like Docklight:
   - *Single* — one port, send and receive.

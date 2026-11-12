@@ -1580,6 +1580,38 @@ private slots:
         QFile::remove(path);
     }
 
+    void unixSocketClientServerRoundTrip()
+    {
+        // UNIX:/path client + UNIXSERVER:/path listener behave like the TCP
+        // pair: the listener waits, accepts one connection, both exchange
+        // data, and the link status reflects connect/disconnect.
+        const QString path = QStringLiteral("/tmp/lucidlight-test-%1.sock").arg(QCoreApplication::applicationPid());
+        QFile::remove(path);
+
+        Backend backend;
+        backend.channelA()->setDevice("UNIXSERVER:" + path);
+        backend.channelB()->setDevice("UNIX:" + path);
+        backend.comm()->setMode(CommManager::Monitor);
+        QVERIFY(backend.comm()->start(backend.channelA()->config(), backend.channelB()->config()));
+        QVERIFY(backend.comm()->running());
+
+        // Both links open; the client connects immediately (the listener
+        // socket file exists as soon as listen() succeeds).
+        QTRY_VERIFY_WITH_TIMEOUT(backend.comm()->link(0)->isOpen(), 2000);
+        QTRY_VERIFY_WITH_TIMEOUT(backend.comm()->link(1)->isOpen(), 2000);
+
+        QVERIFY2(backend.comm()->sendOn(0, QByteArray("hello")),
+                 qPrintable(backend.comm()->link(0)->lastError() + '/' + backend.comm()->link(1)->lastError()));
+        QTRY_VERIFY_WITH_TIMEOUT(backend.log()->count() >= 3, 2000);
+        QByteArray rx;
+        for (int i = 0; i < backend.log()->count(); ++i)
+            rx.append((backend.log()->hexAt(i) + ' ').toLatin1());
+        QVERIFY2(rx.contains("68 65 6C 6C 6F"), qPrintable(rx));   // "hello"
+
+        backend.comm()->stop();
+        QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(path), 1000);
+    }
+
     void commentMacrosExpandOnMatch()
     {
         char slave[128];

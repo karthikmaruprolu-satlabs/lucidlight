@@ -73,7 +73,7 @@ Popup {
 
             Label {
                 Layout.columnSpan: 2
-                text: qsTr("Serial device, or a network channel: TCP:host:port · SERVER:port · UDP:host:port")
+                text: qsTr("Serial device, or network channel: TCP:host:port · SERVER:port · UDP:host:port · UNIX:/path")
                 color: Qt.alpha(theme.muted, 0.7)
                 font.pixelSize: 11
                 visible: root.channel === 0
