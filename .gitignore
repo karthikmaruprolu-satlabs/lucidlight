@@ -5,3 +5,4 @@
 *.o
 moc_*
 qrc_*
+pkgbuild/*-debug-*.pkg.tar.zst
