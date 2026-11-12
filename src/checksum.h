@@ -67,6 +67,11 @@ public:
     // computed value.
     static bool validateSequence(const Area &area, const QByteArray &sequence, QString *error);
 
+    // Byte positions (0-based indices into the sequence) that the checksum
+    // result occupies. Receive matching keeps these positions as wildcards,
+    // because the incoming data carries the sender's checksum there.
+    static QVector<int> resultPositions(const Area &area, int sequenceSize);
+
     // Renders checksum bytes as readable ASCII hex text, e.g. byte 0x7E
     // becomes the two characters "7E". Used by the "A" modifier and by
     // LRC-ASCII style results.

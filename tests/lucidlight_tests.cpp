@@ -31,9 +31,9 @@ private slots:
     {
         const auto parsed = DataFormat::parse("Hi[0D][0A]", DataFormat::Format::Text);
         QVERIFY(parsed.ok());
-        QCOMPARE(parsed.bytes, QByteArray("Hi\r\n"));
-        QCOMPARE(parsed.wildcard.size(), 4);
-        QVERIFY(!parsed.wildcard.contains(true));
+        QCOMPARE(parsed.bytes(), QByteArray("Hi\r\n"));
+        QCOMPARE(parsed.wildcard().size(), 4);
+        QVERIFY(!parsed.wildcard().contains(true));
     }
 
     void textNotationLiteralBracketAndWildcards()
@@ -42,19 +42,22 @@ private slots:
         QVERIFY(parsed.ok());
         QByteArray expected("[AB");
         expected.append(char(0));
-        QCOMPARE(parsed.bytes, expected);
-        QCOMPARE(parsed.wildcard.at(3), true);
+        expected.append(char(0));   // '??' is two one-byte wildcards now
+        QCOMPARE(parsed.bytes(), expected);
+        QCOMPARE(parsed.wildcard().at(3), true);
+        QCOMPARE(parsed.wildcard().at(4), true);
     }
 
     void hexNotationParsesPairsAndWildcards()
     {
         const auto parsed = DataFormat::parse("48 65 ?? 6C", DataFormat::Format::Hex);
         QVERIFY(parsed.ok());
-        QByteArray expected("Hel");
-        expected[2] = char(0);
+        QByteArray expected("He");
+        expected.append(char(0));
+        expected.append(char(0));   // '??' is two one-byte wildcards now
         expected.append('l');
-        QCOMPARE(parsed.bytes, expected);
-        QCOMPARE(parsed.wildcard.at(2), true);
+        QCOMPARE(parsed.bytes(), expected);
+        QCOMPARE(parsed.wildcard().at(2), true);
     }
 
     void hexNotationRejectsOddDigits()
@@ -66,7 +69,7 @@ private slots:
     {
         const auto parsed = DataFormat::parse("72 101, 108", DataFormat::Format::Dec);
         QVERIFY(parsed.ok());
-        QCOMPARE(parsed.bytes, QByteArray("Hel"));
+        QCOMPARE(parsed.bytes(), QByteArray("Hel"));
     }
 
     void decNotationRejectsOutOfRange()
@@ -89,7 +92,7 @@ private slots:
         const QString notation = DataFormat::toTextNotation(raw);
         const auto parsed = DataFormat::parse(notation, DataFormat::Format::Text);
         QVERIFY(parsed.ok());
-        QCOMPARE(parsed.bytes, raw);
+        QCOMPARE(parsed.bytes(), raw);
     }
 
     // ---- receive matching --------------------------------------------------
@@ -99,19 +102,23 @@ private slots:
         QVector<SequenceMatcher::Pattern> patterns;
         SequenceMatcher::Pattern pattern;
         pattern.sequenceId = 7;
-        pattern.bytes = QByteArray("ACK");
+        pattern.elements = DataFormat::parse("ACK", DataFormat::Format::Text).elements;
         patterns.append(pattern);
         matcher.setPatterns(patterns);
 
         int firedId = 0;
         QByteArray firedBytes;
-        connect(&matcher, &SequenceMatcher::matched, [&](int id, const QByteArray &bytes) {
+        connect(&matcher, &SequenceMatcher::matched, [&](int id, const QVector<SequenceMatcher::Token> &tokens) {
             firedId = id;
-            firedBytes = bytes;
+            for (const auto &t : tokens)
+                if (t.kind == SequenceMatcher::Token::Data)
+                    firedBytes.append(char(t.value));
         });
-        matcher.feed("xxACK");
+        matcher.feed("xxACK", 1000);
         QCOMPARE(firedId, 7);
-        QCOMPARE(firedBytes, QByteArray("xxACK"));
+        // Docklight reports the matched window itself, not the discarded
+        // bytes before it.
+        QCOMPARE(firedBytes, QByteArray("ACK"));
     }
 
     void matcherHonorsWildcardsAndSplits()
@@ -121,24 +128,24 @@ private slots:
         {
             SequenceMatcher::Pattern pattern;
             pattern.sequenceId = 1;
-            pattern.bytes = QByteArray::fromHex("0102FF03");  // ?? between 02 and 03
-            pattern.wildcard = {false, false, true, false};
+            pattern.elements =
+                DataFormat::parse("01 02 ? 03", DataFormat::Format::Hex).elements;
             patterns.append(pattern);
         }
         matcher.setPatterns(patterns);
 
         int fires = 0;
-        connect(&matcher, &SequenceMatcher::matched, [&](int, const QByteArray &) { ++fires; });
-        matcher.feed(QByteArray::fromHex("0102AA03"));
+        connect(&matcher, &SequenceMatcher::matched, [&](int, const QVector<SequenceMatcher::Token> &) { ++fires; });
+        matcher.feed(QByteArray::fromHex("0102AA03"), 1000);
         QCOMPARE(fires, 1);
-        matcher.feed(QByteArray::fromHex("01020103"));
+        matcher.feed(QByteArray::fromHex("01020103"), 1100);
         QCOMPARE(fires, 2);
     }
 
     void matcherIgnoresWhenNoPatterns()
     {
         SequenceMatcher matcher;
-        matcher.feed("anything");
+        matcher.feed("anything", 1000);
         // No crash, no signals — nothing connected anyway.
     }
 
@@ -793,6 +800,133 @@ private slots:
                  Checksum::compute("CRC-DOW", data));
         QCOMPARE(Checksum::compute("CRC:32,04C11DB7,FFFFFFFF,FFFFFFFF,Yes,Yes", data),
                  Checksum::compute("CRC-32", data));
+    }
+
+    void textNotationWildcardsOneAndZeroOrOne()
+    {
+        // '?' matches exactly one byte, '#' matches zero or one (Docklight
+        // F7/F8 wildcards).
+        const auto parsed = DataFormat::parse("A?B#C", DataFormat::Format::Text);
+        QVERIFY(parsed.ok());
+        QCOMPARE(parsed.elements.size(), 5);
+        QCOMPARE(parsed.elements.at(0).kind, ParsedBytes::Element::Data);
+        QCOMPARE(parsed.elements.at(1).kind, ParsedBytes::Element::WildOne);
+        QCOMPARE(parsed.elements.at(2).kind, ParsedBytes::Element::Data);
+        QCOMPARE(parsed.elements.at(3).kind, ParsedBytes::Element::WildZeroOrOne);
+        QCOMPARE(parsed.elements.at(4).kind, ParsedBytes::Element::Data);
+    }
+
+    void functionCharacterNotation()
+    {
+        // [&NN] delay in 10 ms units, [%] break, [!V] handshake/parity,
+        // [^MM VV] bitwise comparison — accepted in every representation.
+        const auto text = DataFormat::parse("A[&05]B[%]C[!03]D[^0F 05]",
+                                            DataFormat::Format::Text);
+        QVERIFY(text.ok());
+        QCOMPARE(text.elements.at(1).kind, ParsedBytes::Element::Delay);
+        QCOMPARE(text.elements.at(1).value, 5);
+        QCOMPARE(text.elements.at(3).kind, ParsedBytes::Element::Break);
+        QCOMPARE(text.elements.at(5).kind, ParsedBytes::Element::Handshake);
+        QCOMPARE(text.elements.at(5).value, 3);
+        QCOMPARE(text.elements.at(7).kind, ParsedBytes::Element::Bitwise);
+        QCOMPARE(text.elements.at(7).mask, 0x0F);
+        QCOMPARE(text.elements.at(7).expect, 0x05);
+
+        const auto hex = DataFormat::parse("41 [&02] 42 [%]", DataFormat::Format::Hex);
+        QVERIFY(hex.ok());
+        QCOMPARE(hex.elements.at(1).kind, ParsedBytes::Element::Delay);
+        QCOMPARE(hex.elements.at(1).value, 2);
+        QCOMPARE(hex.elements.at(2).kind, ParsedBytes::Element::Data);
+        QCOMPARE(hex.elements.at(3).kind, ParsedBytes::Element::Break);
+
+        const auto dec = DataFormat::parse("065 [&01] [!10]", DataFormat::Format::Dec);
+        QVERIFY(dec.ok());
+        QCOMPARE(dec.elements.at(1).kind, ParsedBytes::Element::Delay);
+        QCOMPARE(dec.elements.at(2).kind, ParsedBytes::Element::Handshake);
+        QCOMPARE(dec.elements.at(2).value, 0x10);
+    }
+
+    void notationErrorsAreReported()
+    {
+        QVERIFY(!DataFormat::parse("[&999]", DataFormat::Format::Text).ok());
+        QVERIFY(!DataFormat::parse("[^0F]", DataFormat::Format::Text).ok());
+        QVERIFY(!DataFormat::parse("[!GG]", DataFormat::Format::Text).ok());
+        QVERIFY(!DataFormat::parse("41 4", DataFormat::Format::Hex).ok());
+        QVERIFY(!DataFormat::parse("999", DataFormat::Format::Dec).ok());
+    }
+
+    void matcherZeroOrOneWildcard()
+    {
+        // '#' matches zero or one byte; the longest match at the earliest
+        // start wins ("match inside a match" is not returned).
+        SequenceMatcher matcher;
+        QVector<SequenceMatcher::Pattern> patterns;
+        SequenceMatcher::Pattern pattern;
+        pattern.sequenceId = 1;
+        pattern.elements = DataFormat::parse("temp=?##F", DataFormat::Format::Text).elements;
+        patterns.append(pattern);
+        matcher.setPatterns(patterns);
+
+        QByteArray fired;
+        connect(&matcher, &SequenceMatcher::matched, [&](int, const QVector<SequenceMatcher::Token> &tokens) {
+            for (const auto &t : tokens)
+                if (t.kind == SequenceMatcher::Token::Data)
+                    fired.append(char(t.value));
+        });
+        matcher.feed("temp=102F", 1000);
+        // ? takes '1', the two '#' take '0' and '2', 'F' matches.
+        QCOMPARE(fired, QByteArray("temp=102F"));
+    }
+
+    void matcherDelayRequiresPause()
+    {
+        // The '&' delay element only matches after the given silent gap
+        // (value * 10 ms).
+        SequenceMatcher matcher;
+        QVector<SequenceMatcher::Pattern> patterns;
+        SequenceMatcher::Pattern pattern;
+        pattern.sequenceId = 1;
+        pattern.elements = DataFormat::parse("A[&05]B", DataFormat::Format::Text).elements;
+        patterns.append(pattern);
+        matcher.setPatterns(patterns);
+
+        int fires = 0;
+        connect(&matcher, &SequenceMatcher::matched, [&](int, const QVector<SequenceMatcher::Token> &) { ++fires; });
+        matcher.feed("AB", 1000);        // no pause between A and B
+        QCOMPARE(fires, 0);
+        matcher.feed("A", 2000);
+        matcher.feed("B", 2100);         // 100 ms gap >= 50 ms required
+        QCOMPARE(fires, 1);
+    }
+
+    void matcherChecksumValidation()
+    {
+        // A receive sequence with a checksum area matches only when the
+        // stored checksum is right (mode OK) or wrong (mode WRONG).
+        SequenceMatcher matcher;
+        QVector<SequenceMatcher::Pattern> patterns;
+        SequenceMatcher::Pattern ok;
+        ok.sequenceId = 1;
+        ok.hasChecksum = true;
+        ok.checksumSpec = "MOD256";
+        ok.checksumMode = 0;
+        // Docklight receives checksum placeholders as part of the sequence:
+        // "ABC" plus one placeholder byte, MOD256 over the first three.
+        ok.elements = DataFormat::parse("41 42 43 00", DataFormat::Format::Hex).elements;
+        // "ABC" has MOD256 sum 0xC6.
+        patterns.append(ok);
+        matcher.setPatterns(patterns);
+
+        int fires = 0;
+        connect(&matcher, &SequenceMatcher::matched, [&](int, const QVector<SequenceMatcher::Token> &) { ++fires; });
+        matcher.feed(QByteArray::fromHex("414243C6"), 1000);   // checksum fits
+        QCOMPARE(fires, 1);
+        matcher.feed(QByteArray::fromHex("41424300"), 1100);   // wrong checksum
+        QCOMPARE(fires, 1);
+        ok.checksumMode = 1;   // WRONG: mismatch constitutes the match
+        matcher.setPatterns(patterns);
+        matcher.feed(QByteArray::fromHex("41424300"), 1200);
+        QCOMPARE(fires, 2);
     }
 
     void portSettingsReachTheLine()

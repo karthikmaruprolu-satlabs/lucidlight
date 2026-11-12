@@ -24,6 +24,12 @@ struct Sequence {
     int repeatIntervalMs = 0;     // > 0 keeps re-sending while active
     int replyToId = -1;           // receive sequences: send this id when matched
     bool enabled = true;
+    // Docklight-style receive actions and documentation.
+    QString comment;              // action comment text, with %_ macros
+    bool trigger = false;         // action: snapshot trigger mark
+    bool stopRun = false;         // action: stop communication
+    QString checksumSpec;         // checksum area text, empty = none
+    int checksumMode = 0;         // 0 OK, 1 WRONG, 2 BOTH
 };
 
 class SequenceModel : public QAbstractListModel {
@@ -42,6 +48,11 @@ public:
         RepeatRole,
         ReplyToRole,
         EnabledRole,
+        CommentRole,
+        TriggerRole,
+        StopRunRole,
+        ChecksumSpecRole,
+        ChecksumModeRole,
     };
 
     explicit SequenceModel(QObject *parent = nullptr);

@@ -429,3 +429,24 @@ bool Checksum::validateSequence(const Area &area, const QByteArray &sequence, QS
 QByteArray Checksum::toAsciiHex(const QByteArray &bytes, bool littleEndian) {
     return asciiHex(bytes, littleEndian);
 }
+
+
+QVector<int> Checksum::resultPositions(const Area &area, int sequenceSize) {
+    QVector<int> positions;
+    if (!area.ok || sequenceSize <= 0)
+        return positions;
+    const int size = area.asciiResult && area.spec.kind != Spec::LrcAscii
+                         ? asciiHex(QByteArray(area.spec.width == 16 ? 2 : 1, '\0'),
+                                    area.littleEndian).size()
+                         : specBytes(area.spec);
+    int target = area.targetPos;
+    if (target == 0)
+        target = -(size + (area.asciiResult && area.spec.kind != Spec::LrcAscii ? 2 : 0));
+    const int index = target > 0 ? target - 1 : sequenceSize + target;
+    for (int i = 0; i < size; ++i) {
+        const int p = index + i;
+        if (p >= 0 && p < sequenceSize)
+            positions.append(p);
+    }
+    return positions;
+}

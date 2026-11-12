@@ -1,5 +1,7 @@
 #include "backend.h"
 
+#include "checksum.h"
+
 #include <QClipboard>
 #include <QDateTime>
 #include <QDir>
@@ -101,7 +103,7 @@ void Backend::setScriptSource(const QString &source) {
 void Backend::handleIncoming(int channel, const QByteArray &data) {
     // The matcher may fire a trigger for this very burst; remember that so
     // the log row gets the highlight mark.
-    m_matcher.feed(data);
+    m_matcher.feed(data, QDateTime::currentMSecsSinceEpoch());
     const bool highlighted = m_pendingHighlight;
     m_pendingHighlight = false;
     m_log->append(CommLog::Rx, channel, data, highlighted);
@@ -111,36 +113,149 @@ void Backend::handleTransmitted(int channel, const QByteArray &data) {
     m_log->append(CommLog::Tx, channel, data);
 }
 
-void Backend::handleTrigger(int sequenceId, const QByteArray &matched) {
+void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens) {
     m_pendingHighlight = true;
+    QByteArray received;
+    for (const SequenceMatcher::Token &t : tokens)
+        if (t.kind == SequenceMatcher::Token::Data)
+            received.append(char(t.value));
     for (const Sequence &seq : m_sequences->sequences()) {
         if (seq.id != sequenceId || !seq.enabled)
             continue;
-        applyTrigger(&seq, matched);
+        // Docklight counts every detection since start/reset.
+        m_receiveCounts[sequenceId]++;
+        applyTrigger(&seq, received);
         break;
     }
 }
 
-void Backend::applyTrigger(const Sequence *receiveSequence, const QByteArray &matched) {
-    if (receiveSequence->replyToId < 0)
-        return;
-    for (const Sequence &candidate : m_sequences->sequences()) {
-        if (candidate.id != receiveSequence->replyToId || !candidate.isSend)
+// Docklight's Receive Sequence comment macros: %_S %_L %_T %_C %_X %_I %_N
+// %_A %_H %_D %_B, with optional (start, length) ranges on the data macros.
+QString Backend::expandCommentMacros(const QString &text, const Sequence *seq,
+                                     const QByteArray &received, int channel) {
+    QString out;
+    for (int i = 0; i < text.size();) {
+        if (text.mid(i, 2) != QStringLiteral("%_")) {
+            out.append(text.at(i));
+            ++i;
             continue;
-        const auto parsed = DataFormat::parse(candidate.data, candidate.format);
-        if (!parsed.ok()) {
-            m_log->appendEvent(tr("Trigger %1: reply sequence has invalid data")
-                                   .arg(receiveSequence->name));
-            return;
         }
-        if (m_comm->send(parsed.bytes))
-            m_log->appendEvent(tr("Trigger %1 → sent %2").arg(receiveSequence->name, candidate.name));
-        else
-            m_log->appendEvent(tr("Trigger %1: send failed").arg(receiveSequence->name));
-        return;
+        const QChar code = i + 2 < text.size() ? text.at(i + 2) : QChar();
+        const int after = i + 3;
+        int start = 0, length = -1;
+        bool hasRange = false;
+        if (after < text.size() && text.at(after) == QLatin1Char('(')) {
+            const int close = text.indexOf(QLatin1Char(')'), after);
+            if (close > after) {
+                const QStringList parts =
+                    text.mid(after + 1, close - after - 1).split(',');
+                if (parts.size() == 2) {
+                    start = parts.at(0).trimmed().toInt();
+                    length = parts.at(1).trimmed().toInt();
+                    hasRange = true;
+                }
+            }
+        }
+        const int bodyEnd = hasRange
+                                ? text.indexOf(QLatin1Char(')'), after) + 1
+                                : after + 1;
+        QString replacement;
+        const auto dataText = [&](DataFormat::Format format) {
+            QByteArray slice = received;
+            if (hasRange) {
+                // 1-based start, -1 = until last, -2 = second last, ...
+                int begin = start > 0 ? start - 1 : received.size() + start;
+                int end = length < 0 ? received.size() + length + 1 : begin + length;
+                begin = qBound(0, begin, received.size());
+                end = qBound(0, end, received.size());
+                if (end < begin)
+                    end = begin;
+                slice = received.mid(begin, end - begin);
+            }
+            if (format == DataFormat::Format::Hex)
+                return DataFormat::toHex(slice);
+            return DataFormat::display(slice, format);
+        };
+        switch (code.unicode()) {
+        case 'S': replacement = "\a"; break;                  // bell (text form)
+        case 'L': replacement = "\n"; break;
+        case 'T': replacement = QLocale().toString(QDateTime::currentDateTime(),
+                                                    QStringLiteral("HH:mm:ss.zzz"));
+            break;
+        case 'C': replacement = channel == 0 ? "1" : "2"; break;
+        case 'X': replacement = channel == 0 ? "TX" : "RX"; break;
+        case 'I': replacement = QString::number(indexOfSequence(seq->id)); break;
+        case 'N': replacement = seq->name; break;
+        case 'A': replacement = dataText(DataFormat::Format::Text); break;
+        case 'H': replacement = dataText(DataFormat::Format::Hex); break;
+        case 'D': replacement = dataText(DataFormat::Format::Dec); break;
+        default: break;
+        case 'B': {
+            QString bin;
+            const QStringList hexBytes = dataText(DataFormat::Format::Hex)
+                                             .split(' ', Qt::SkipEmptyParts);
+            for (const QString &hexByte : hexBytes) {
+                if (!bin.isEmpty())
+                    bin += QLatin1Char(' ');
+                bin += QString("%1").arg(hexByte.toInt(nullptr, 16), 8, 2, QChar('0'));
+            }
+            replacement = bin;
+            break;
+        }
+        }
+        out.append(replacement);
+        i = qMax(bodyEnd, i + 3);
     }
-    m_log->appendEvent(tr("Trigger %1: reply sequence missing").arg(receiveSequence->name));
-    Q_UNUSED(matched)
+    return out;
+}
+
+int Backend::indexOfSequence(int id) const {
+    const auto &list = m_sequences->sequences();
+    for (int i = 0; i < list.size(); ++i)
+        if (list.at(i).id == id)
+            return i;
+    return -1;
+}
+
+void Backend::applyTrigger(const Sequence *receiveSequence, const QByteArray &matched) {
+    // Action: Answer — transmit one send sequence (wildcards not allowed).
+    if (receiveSequence->replyToId >= 0) {
+        for (const Sequence &candidate : m_sequences->sequences()) {
+            if (candidate.id != receiveSequence->replyToId || !candidate.isSend)
+                continue;
+            const auto parsed = DataFormat::parse(candidate.data, candidate.format);
+            const bool hasWildcard = std::any_of(parsed.elements.begin(), parsed.elements.end(),
+                                                 [](const ParsedBytes::Element &e) {
+                                                     return e.kind == ParsedBytes::Element::WildOne
+                                                            || e.kind == ParsedBytes::Element::WildZeroOrOne;
+                                                 });
+            if (!parsed.ok() || hasWildcard) {
+                m_log->appendEvent(tr("Trigger %1: reply sequence has invalid data")
+                                       .arg(receiveSequence->name));
+                return;
+            }
+            if (m_comm->send(parsed.bytes()))
+                m_log->appendEvent(tr("Trigger %1 → sent %2").arg(receiveSequence->name, candidate.name));
+            else
+                m_log->appendEvent(tr("Trigger %1: send failed").arg(receiveSequence->name));
+            break;
+        }
+    }
+    // Action: Comment — macro-expanded text into the log.
+    if (!receiveSequence->comment.isEmpty()) {
+        const int channel = m_comm->mode() == CommManager::Monitor ? 1 : 1;
+        m_log->appendComment(expandCommentMacros(receiveSequence->comment, receiveSequence,
+                                                 matched, channel));
+    }
+    // Action: Trigger — snapshot mark (highlighted rows in the log).
+    if (receiveSequence->trigger)
+        m_pendingHighlight = true;
+    // Action: Stop — end the test run.
+    if (receiveSequence->stopRun) {
+        m_log->appendEvent(tr("Stop sequence %1 matched — stopping communication")
+                               .arg(receiveSequence->name));
+        m_comm->stop();
+    }
 }
 
 // Rebuild the receive-trigger patterns from the sequence table. Called at
@@ -151,12 +266,27 @@ void Backend::syncMatcher() {
         if (seq.isSend || !seq.enabled)
             continue;
         const auto parsed = DataFormat::parse(seq.data, seq.format);
-        if (!parsed.ok() || parsed.bytes.isEmpty())
+        if (!parsed.ok())
+            continue;
+        bool hasData = false;
+        for (const auto &e : parsed.elements)
+            if (e.kind == ParsedBytes::Element::Data
+                || e.kind == ParsedBytes::Element::WildOne
+                || e.kind == ParsedBytes::Element::WildZeroOrOne
+                || e.kind == ParsedBytes::Element::Bitwise
+                || e.kind == ParsedBytes::Element::Break
+                || e.kind == ParsedBytes::Element::Handshake)
+                hasData = true;
+        if (!hasData && seq.checksumSpec.isEmpty())
             continue;
         SequenceMatcher::Pattern pattern;
         pattern.sequenceId = seq.id;
-        pattern.bytes = parsed.bytes;
-        pattern.wildcard = parsed.wildcard;
+        pattern.elements = parsed.elements;
+        if (!seq.checksumSpec.isEmpty()) {
+            pattern.hasChecksum = true;
+            pattern.checksumSpec = seq.checksumSpec;
+            pattern.checksumMode = seq.checksumMode;
+        }
         patterns.append(pattern);
     }
     m_matcher.setPatterns(patterns);
@@ -186,7 +316,7 @@ bool Backend::sendText(const QString &text, int format) {
         emit toast(parsed.error);
         return false;
     }
-    if (!m_comm->send(parsed.bytes)) {
+    if (!m_comm->send(parsed.bytes())) {
         if (!m_comm->running())
             emit toast(tr("Communication is not running"));
         return false;
@@ -203,7 +333,7 @@ void Backend::sendSequence(int row) {
         emit toast(tr("%1: %2").arg(seq->name, parsed.error));
         return;
     }
-    if (!m_comm->send(parsed.bytes)) {
+    if (!m_comm->send(parsed.bytes())) {
         if (!m_comm->running())
             emit toast(tr("Communication is not running"));
         return;
@@ -244,7 +374,7 @@ void Backend::checkRepeats() {
             if (seq.id != seqId || !seq.enabled)
                 continue;
             const auto parsed = DataFormat::parse(seq.data, seq.format);
-            if (parsed.ok() && m_comm->send(parsed.bytes))
+            if (parsed.ok() && m_comm->send(parsed.bytes()))
                 m_nextRepeatAt.insert(seqId, now + seq.repeatIntervalMs);
             break;
         }
@@ -373,7 +503,7 @@ QString Backend::previewBytes(const QString &text, int format) const {
     const auto parsed = DataFormat::parse(text, DataFormat::Format(format));
     if (!parsed.ok())
         return parsed.error;
-    return DataFormat::toHex(parsed.bytes);
+    return DataFormat::toHex(parsed.bytes());
 }
 
 void Backend::copyToClipboard(const QString &text) {

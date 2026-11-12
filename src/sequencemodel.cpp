@@ -18,6 +18,11 @@ QHash<int, QByteArray> SequenceModel::roleNames() const {
         {RepeatRole, "repeatIntervalMs"},
         {ReplyToRole, "replyToId"},
         {EnabledRole, "seqEnabled"},
+        {CommentRole, "comment"},
+        {TriggerRole, "trigger"},
+        {StopRunRole, "stopRun"},
+        {ChecksumSpecRole, "checksumSpec"},
+        {ChecksumModeRole, "checksumMode"},
     };
 }
 
@@ -34,13 +39,18 @@ QVariant SequenceModel::data(const QModelIndex &index, int role) const {
     case PreviewRole: {
         // A short rendered sample so the list itself says what goes out.
         const auto parsed = DataFormat::parse(seq.data, seq.format);
-        const QString shown = parsed.ok() ? DataFormat::display(parsed.bytes, DataFormat::Format::Text) : seq.data;
+        const QString shown = parsed.ok() ? DataFormat::display(parsed.bytes(), DataFormat::Format::Text) : seq.data;
         return shown.length() > 48 ? shown.left(48) + "…" : shown;
     }
     case HotkeyRole: return seq.hotkey;
     case RepeatRole: return seq.repeatIntervalMs;
     case ReplyToRole: return seq.replyToId;
     case EnabledRole: return seq.enabled;
+    case CommentRole: return seq.comment;
+    case TriggerRole: return seq.trigger;
+    case StopRunRole: return seq.stopRun;
+    case ChecksumSpecRole: return seq.checksumSpec;
+    case ChecksumModeRole: return seq.checksumMode;
     default: return {};
     }
 }
@@ -76,6 +86,11 @@ QVariantMap SequenceModel::get(int row) const {
     map["repeatIntervalMs"] = seq.repeatIntervalMs;
     map["replyToId"] = seq.replyToId;
     map["enabled"] = seq.enabled;
+    map["comment"] = seq.comment;
+    map["trigger"] = seq.trigger;
+    map["stopRun"] = seq.stopRun;
+    map["checksumSpec"] = seq.checksumSpec;
+    map["checksumMode"] = seq.checksumMode;
     return map;
 }
 
@@ -101,6 +116,11 @@ void SequenceModel::applyFields(Sequence &seq, const QVariantMap &fields) {
     if (fields.contains("repeatIntervalMs")) seq.repeatIntervalMs = fields.value("repeatIntervalMs").toInt();
     if (fields.contains("replyToId")) seq.replyToId = fields.value("replyToId").toInt();
     if (fields.contains("enabled")) seq.enabled = fields.value("enabled").toBool();
+    if (fields.contains("comment")) seq.comment = fields.value("comment").toString();
+    if (fields.contains("trigger")) seq.trigger = fields.value("trigger").toBool();
+    if (fields.contains("stopRun")) seq.stopRun = fields.value("stopRun").toBool();
+    if (fields.contains("checksumSpec")) seq.checksumSpec = fields.value("checksumSpec").toString();
+    if (fields.contains("checksumMode")) seq.checksumMode = fields.value("checksumMode").toInt();
 }
 
 void SequenceModel::update(int row, const QVariantMap &fields) {

@@ -166,7 +166,7 @@ bool DLObject::Send(const QString &data) {
         m_host->m_lastError = parsed.error;
         return false;
     }
-    return sendBytes(parsed.bytes);
+    return sendBytes(parsed.bytes());
 }
 
 bool DLObject::SendHex(const QString &hex) {
@@ -175,7 +175,7 @@ bool DLObject::SendHex(const QString &hex) {
         m_host->m_lastError = parsed.error;
         return false;
     }
-    return sendBytes(parsed.bytes);
+    return sendBytes(parsed.bytes());
 }
 
 bool DLObject::SendStr(const QString &text) {
@@ -305,8 +305,8 @@ QJSValue DLObject::ReceiveHex(const QString &pattern, int timeoutMs) {
         m_host->m_lastError = parsed.error;
         return QJSValue(false);
     }
-    const QByteArray wanted = parsed.bytes;
-    const QVector<bool> wildcard = parsed.wildcard;
+    const QByteArray wanted = parsed.bytes();
+    const QVector<bool> wildcard = parsed.wildcard();
     auto matchesAt = [&](const QByteArray &buffer, int start) {
         for (int i = 0; i < wanted.size(); ++i)
             if (!wildcard.at(i) && buffer.at(start + i) != wanted.at(i))
@@ -531,8 +531,8 @@ DLScriptEngine::Snapshot ScriptRunner::snapshot() const {
         entry.isSend = seq.isSend;
         entry.format = seq.format;
         const auto parsed = DataFormat::parse(seq.data, seq.format);
-        entry.bytes = parsed.ok() ? parsed.bytes : QByteArray();
-        entry.wildcard = parsed.ok() ? parsed.wildcard : QVector<bool>();
+        entry.bytes = parsed.ok() ? parsed.bytes() : QByteArray();
+        entry.wildcard = parsed.ok() ? parsed.wildcard() : QVector<bool>();
         snap.entries.append(entry);
     }
     return snap;

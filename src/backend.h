@@ -84,7 +84,7 @@ signals:
 private slots:
     void handleIncoming(int channel, const QByteArray &data);
     void handleTransmitted(int channel, const QByteArray &data);
-    void handleTrigger(int sequenceId, const QByteArray &matched);
+    void handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens);
     void checkRepeats();
     void scriptFinished(bool ok, const QString &error);
 
@@ -92,6 +92,9 @@ private:
     void wireDirtyTracking();
     void applyTrigger(const Sequence *receiveSequence, const QByteArray &matched);
     void syncMatcher();
+    QString expandCommentMacros(const QString &text, const Sequence *seq,
+                                const QByteArray &received, int channel);
+    int indexOfSequence(int id) const;
 
     CommManager *m_comm;
     ChannelSettings *m_a;
@@ -107,6 +110,8 @@ private:
     QString m_projectPath;
     QString m_scriptSource;
     bool m_pendingHighlight = false;
+
+    QHash<int, int> m_receiveCounts;   // Docklight Receive Sequence hit counters
 
     QTimer m_repeatTimer;
     QHash<int, qint64> m_nextRepeatAt;

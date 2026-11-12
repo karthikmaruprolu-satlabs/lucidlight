@@ -2,96 +2,275 @@
 
 #include <QRegularExpression>
 
+namespace {
+
+bool isHexLetter(const QChar &c) {
+    return (c >= QLatin1Char('a') && c <= QLatin1Char('f'))
+           || (c >= QLatin1Char('A') && c <= QLatin1Char('F'));
+}
+
+// Parses one bracket token starting at '[', i as the bracket index.
+// Returns false when the token is malformed (error already set).
+bool parseBracket(const QString &input, int &i, ParsedBytes &result) {
+    const int open = i;
+    int j = i + 1;
+    if (j < input.size() && input.at(j) == QLatin1Char('[')) {
+        // "[[" inserts a literal '['.
+        ParsedBytes::Element e;
+        e.kind = ParsedBytes::Element::Data;
+        e.value = '[';
+        result.elements.append(e);
+        i = j;
+        return true;
+    }
+    static const QString funcChars = QStringLiteral("&%!^");
+    if (j >= input.size()
+        || !(input.at(j).isLetter() || input.at(j).isDigit()
+             || funcChars.contains(input.at(j)))) {
+        result.error = QObject::tr("Invalid escape at position %1").arg(open + 1);
+        return false;
+    }
+    // Classic hex byte escape: [0D] or [D].
+    if (input.at(j).isDigit()
+        || isHexLetter(input.at(j))) {
+        int k = j;
+        while (k < input.size() && k <= j + 1 && input.at(k).isDigit())
+            ++k;
+        // Also accept a-f digits in the second position.
+        while (k < input.size() && k <= j + 1
+               && QStringLiteral("abcdefABCDEF").contains(input.at(k)))
+            ++k;
+        const int digits = k - j;
+        if (digits == 0 || k >= input.size() || input.at(k) != QLatin1Char(']')) {
+            result.error = QObject::tr("Invalid escape at position %1").arg(open + 1);
+            return false;
+        }
+        ParsedBytes::Element e;
+        e.kind = ParsedBytes::Element::Data;
+        e.value = uchar(input.mid(j, digits).toInt(nullptr, 16));
+        result.elements.append(e);
+        i = k;
+        return true;
+    }
+    const QChar func = input.at(j).toUpper();
+    ++j;
+    if (func == QLatin1Char('%')) {
+        if (j >= input.size() || input.at(j) != QLatin1Char(']')) {
+            result.error = QObject::tr("Invalid escape at position %1").arg(open + 1);
+            return false;
+        }
+        ParsedBytes::Element e;
+        e.kind = ParsedBytes::Element::Break;
+        result.elements.append(e);
+        i = j;
+        return true;
+    }
+    // [&NN], [!V] and [^MM VV] read values up to the closing bracket.
+    int close = input.indexOf(QLatin1Char(']'), j);
+    if (close < 0) {
+        result.error = QObject::tr("Invalid escape at position %1").arg(open + 1);
+        return false;
+    }
+    const QString body = input.mid(j, close - j).trimmed();
+    ParsedBytes::Element e;
+    if (func == QLatin1Char('&')) {
+        bool ok = false;
+        const int value = body.toInt(&ok);
+        if (!ok || value < 0 || value > 255) {
+            result.error = QObject::tr("Delay needs a value from 0 to 255");
+            return false;
+        }
+        e.kind = ParsedBytes::Element::Delay;
+        e.value = uchar(value);
+    } else if (func == QLatin1Char('!')) {
+        const QString compact = QString(body).remove(' ');
+        bool ok = false;
+        const int value = compact.toInt(&ok, 16);
+        if (!ok || value < 0 || value > 255) {
+            result.error = QObject::tr("Handshake needs a hex value from 00 to FF");
+            return false;
+        }
+        e.kind = ParsedBytes::Element::Handshake;
+        e.value = uchar(value);
+    } else if (func == QLatin1Char('^')) {
+        const QStringList parts = body.split(' ', Qt::SkipEmptyParts);
+        if (parts.size() != 2) {
+            result.error = QObject::tr("Bitwise comparison needs mask and value");
+            return false;
+        }
+        bool okM = false, okV = false;
+        const int mask = parts.at(0).toInt(&okM, 16);
+        const int expect = parts.at(1).toInt(&okV, 16);
+        if (!okM || !okV || mask < 0 || mask > 255 || expect < 0 || expect > 255) {
+            result.error = QObject::tr("Bitwise mask and value must be hex bytes");
+            return false;
+        }
+        e.kind = ParsedBytes::Element::Bitwise;
+        e.mask = uchar(mask);
+        e.expect = uchar(expect);
+    } else {
+        result.error = QObject::tr("Unknown function character '%1'").arg(func);
+        return false;
+    }
+    result.elements.append(e);
+    i = close;
+    return true;
+}
+
+}  // namespace
+
 ParsedBytes DataFormat::parse(const QString &input, Format format) {
     ParsedBytes result;
     if (format == Format::Text) {
         for (int i = 0; i < input.size(); ++i) {
             const QChar c = input.at(i);
             if (c == QLatin1Char('[')) {
-                if (i + 1 < input.size() && input.at(i + 1) == QLatin1Char('[')) {
-                    result.bytes.append('[');
-                    result.wildcard.append(false);
-                    ++i;
-                    continue;
-                }
-                // [0D] inserts a hex byte; 1 or 2 hex digits are both accepted.
-                int j = i + 1;
-                while (j < input.size() && j <= i + 2 && isxdigit(input.at(j).toLatin1()))
-                    ++j;
-                const int digits = j - (i + 1);
-                if (digits == 0 || j >= input.size() || input.at(j) != QLatin1Char(']')) {
-                    result.error = QObject::tr("Invalid escape at position %1").arg(i + 1);
+                if (!parseBracket(input, i, result))
                     return result;
-                }
-                result.bytes.append(char(input.mid(i + 1, digits).toInt(nullptr, 16)));
-                // One byte came out of the escape, so one mask entry.
-                result.wildcard.append(false);
-                i = j;
                 continue;
             }
-            if (c == QLatin1Char('?') && i + 1 < input.size() && input.at(i + 1) == QLatin1Char('?')) {
-                result.bytes.append(char(0));
-                result.wildcard.append(true);
-                ++i;
+            if (c == QLatin1Char('?')) {
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildOne;
+                result.elements.append(e);
                 continue;
             }
-            const QString segment = QString(c);
-            const QByteArray encoded = segment.toUtf8();
-            result.bytes.append(encoded);
-            for (int k = 0; k < encoded.size(); ++k)
-                result.wildcard.append(false);
+            if (c == QLatin1Char('#')) {
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildZeroOrOne;
+                result.elements.append(e);
+                continue;
+            }
+            const QByteArray encoded = QString(c).toUtf8();
+            for (int k = 0; k < encoded.size(); ++k) {
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::Data;
+                e.value = uchar(encoded.at(k));
+                result.elements.append(e);
+            }
         }
         return result;
     }
 
     if (format == Format::Hex) {
-        QString compact;
-        compact.reserve(input.size());
-        for (const QChar c : input)
-            if (c != QLatin1Char(' ') && c != QLatin1Char('\t') && c != QLatin1Char(',')
-                && c != QLatin1Char(':') && c != QLatin1Char('\n'))
-                compact.append(c);
-        if (compact.size() % 2 != 0) {
-            result.error = QObject::tr("Hex input needs pairs of digits");
-            return result;
-        }
-        for (int i = 0; i < compact.size(); i += 2) {
-            const QString pair = compact.mid(i, 2);
-            if (pair == QLatin1String("??")) {
-                result.bytes.append(char(0));
-                result.wildcard.append(true);
+        // Bracket function tokens may contain spaces ([^0F 05]), so tokenize
+        // with a regex that keeps them intact.
+        static const QRegularExpression tokenRe(
+            QStringLiteral("\\[[^\\]]*\\]|[^\\s,:]+"));
+        auto it = tokenRe.globalMatch(input);
+        while (it.hasNext()) {
+            const QString token = it.next().captured(0);
+            if (token.startsWith(QLatin1Char('['))) {
+                int i = input.indexOf(token);
+                if (!parseBracket(input, i, result))
+                    return result;
                 continue;
             }
-            bool ok = false;
-            const int value = pair.toInt(&ok, 16);
-            if (!ok) {
-                result.error = QObject::tr("'%1' is not a hex byte").arg(pair);
+            if (token == QLatin1String("?")) {
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildOne;
+                result.elements.append(e);
+                continue;
+            }
+            if (token == QLatin1String("#")) {
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildZeroOrOne;
+                result.elements.append(e);
+                continue;
+            }
+            if (token == QLatin1String("??")) {
+                // Compatibility: two one-byte wildcards.
+                for (int k = 0; k < 2; ++k) {
+                    ParsedBytes::Element e;
+                    e.kind = ParsedBytes::Element::WildOne;
+                    result.elements.append(e);
+                }
+                continue;
+            }
+            if (token.size() % 2 != 0) {
+                result.error = QObject::tr("'%1' is not a hex byte").arg(token);
                 return result;
             }
-            result.bytes.append(char(value));
-            result.wildcard.append(false);
+            for (int p = 0; p < token.size(); p += 2) {
+                bool ok = false;
+                const int value = token.mid(p, 2).toInt(&ok, 16);
+                if (!ok) {
+                    result.error = QObject::tr("'%1' is not a hex byte").arg(token.mid(p, 2));
+                    return result;
+                }
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::Data;
+                e.value = uchar(value);
+                result.elements.append(e);
+            }
         }
         return result;
     }
 
-    // Dec mode: whitespace-separated decimal byte values.
-    const QStringList tokens = input.split(QRegularExpression(QStringLiteral("[\\s,]+")), Qt::SkipEmptyParts);
-    for (const QString &token : tokens) {
-        if (token == QLatin1String("??")) {
-            result.bytes.append(char(0));
-            result.wildcard.append(true);
-            continue;
+    // Dec mode: decimal byte values, same wildcard and function tokens.
+    {
+        static const QRegularExpression tokenRe(
+            QStringLiteral("\\[[^\\]]*\\]|[^\\s,]+"));
+        auto it = tokenRe.globalMatch(input);
+        while (it.hasNext()) {
+            const QString token = it.next().captured(0);
+            if (token.startsWith(QLatin1Char('['))) {
+                int i = input.indexOf(token);
+                if (!parseBracket(input, i, result))
+                    return result;
+                continue;
+            }
+            if (token == QLatin1String("?")) {
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildOne;
+                result.elements.append(e);
+                continue;
+            }
+            if (token == QLatin1String("#")) {
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildZeroOrOne;
+                result.elements.append(e);
+                continue;
+            }
+            if (token == QLatin1String("??")) {
+                for (int k = 0; k < 2; ++k) {
+                    ParsedBytes::Element e;
+                    e.kind = ParsedBytes::Element::WildOne;
+                    result.elements.append(e);
+                }
+                continue;
+            }
+            bool ok = false;
+            const int value = token.toInt(&ok, 10);
+            if (!ok || value < 0 || value > 255) {
+                result.error = QObject::tr("'%1' is not a decimal byte").arg(token);
+                return result;
+            }
+            ParsedBytes::Element e;
+            e.kind = ParsedBytes::Element::Data;
+            e.value = uchar(value);
+            result.elements.append(e);
         }
-        bool ok = false;
-        const int value = token.toInt(&ok, 10);
-        if (!ok || value < 0 || value > 255) {
-            result.error = QObject::tr("'%1' is not a decimal byte").arg(token);
-            return result;
-        }
-        result.bytes.append(char(value));
-        result.wildcard.append(false);
     }
     return result;
+}
+
+QByteArray ParsedBytes::bytes() const {
+    QByteArray out;
+    for (const Element &e : elements)
+        if (e.kind == Element::Data || e.kind == Element::WildOne
+            || e.kind == Element::WildZeroOrOne || e.kind == Element::Bitwise)
+            out.append(char(e.kind == Element::Data ? e.value : 0));
+    return out;
+}
+
+QVector<bool> ParsedBytes::wildcard() const {
+    QVector<bool> out;
+    for (const Element &e : elements)
+        if (e.kind == Element::Data || e.kind == Element::WildOne
+            || e.kind == Element::WildZeroOrOne || e.kind == Element::Bitwise)
+            out.append(e.kind != Element::Data);
+    return out;
 }
 
 QString DataFormat::display(const QByteArray &data, Format format) {
