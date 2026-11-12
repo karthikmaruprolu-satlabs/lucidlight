@@ -1563,6 +1563,23 @@ private slots:
         QCOMPARE(backend.log()->findNext("", -1), -1);
     }
 
+    void printLogWritesPdf()
+    {
+        Backend backend;
+        backend.log()->append(CommLog::Rx, 0, "PING", false);
+        backend.log()->append(CommLog::Tx, 0, "PONG", false);
+        const QString path = "/tmp/lucidlight-test-print.pdf";
+        QFile::remove(path);
+        backend.printLogTo(path);
+        QFile pdf(path);
+        QVERIFY(pdf.open(QIODevice::ReadOnly));
+        const QByteArray head = pdf.read(5);
+        pdf.close();
+        QCOMPARE(head, QByteArray("%PDF-"));
+        QVERIFY(pdf.size() > 500);
+        QFile::remove(path);
+    }
+
     void commentMacrosExpandOnMatch()
     {
         char slave[128];

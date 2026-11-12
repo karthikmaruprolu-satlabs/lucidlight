@@ -77,6 +77,9 @@ public:
     Q_INVOKABLE void sendByHotkey(int keyNumber);   // 1..12 for F1..F12
     Q_INVOKABLE void clearLog();
     Q_INVOKABLE void saveLogTo(const QString &path);
+    // Renders the whole communication window (all rows, all columns) into a
+    // PDF file — the Docklight "Print" for a windowless Linux world.
+    Q_INVOKABLE void printLogTo(const QString &path);
     Q_INVOKABLE void saveScriptTo(const QString &path);
     Q_INVOKABLE void newProject();
     Q_INVOKABLE void openProjectFrom(const QString &path);

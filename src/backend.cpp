@@ -9,6 +9,10 @@
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <QPdfWriter>
+#include <QTextDocument>
+#include <QFontDatabase>
+#include <QPageLayout>
 #include <QStandardPaths>
 
 #include "project.h"
@@ -1127,6 +1131,39 @@ void Backend::saveLogTo(const QString &path) {
     }
     m_log->appendEvent(tr("Log saved to %1").arg(path));
     emit toast(tr("Log saved"));
+}
+
+void Backend::printLogTo(const QString &path) {
+    if (path.isEmpty())
+        return;
+    QPdfWriter writer(path);
+    writer.setTitle(tr("Lucidlight communication window"));
+    writer.setCreator("Lucidlight");
+    const QPageSize page(QPageSize::A4);
+    writer.setPageSize(page);
+    const qreal marginMm = 12.0;
+    QMarginsF margins(marginMm, marginMm, marginMm, marginMm);
+    writer.setPageMargins(margins, QPageLayout::Millimeter);
+
+    QTextDocument doc;
+    doc.setDocumentMargin(0);
+    const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    doc.setDefaultFont(mono);
+
+    // A small header, then the window content line by line. Monospace keeps
+    // the ASCII/HEX/DEC/Binary columns aligned.
+    QString html = QStringLiteral("<pre style=\"font-family:'%1';font-size:8pt\">")
+                       .arg(mono.family());
+    html += tr("Lucidlight communication window — %1\n\n")
+                .arg(QDateTime::currentDateTime().toString(
+                    QStringLiteral("yyyy-MM-dd hh:mm:ss")));
+    const QString text = m_log->toText();
+    html += text.toHtmlEscaped();
+    html += QStringLiteral("</pre>");
+    doc.setHtml(html);
+    doc.print(&writer);
+    m_log->appendEvent(tr("Communication window printed to %1").arg(path));
+    emit toast(tr("Printed to %1").arg(QFileInfo(path).fileName()));
 }
 
 void Backend::newProject() {

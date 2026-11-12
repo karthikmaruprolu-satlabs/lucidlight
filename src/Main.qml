@@ -56,6 +56,7 @@ ApplicationWindow {
         scriptPanel.runScript();
     } }
     Shortcut { sequence: "Ctrl+Shift+S"; context: Qt.ApplicationShortcut; onActivated: saveLog() }
+    Shortcut { sequence: "Ctrl+P"; context: Qt.ApplicationShortcut; onActivated: printLog() }
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; enabled: !focusInTextField(); onActivated: helpVisible = !helpVisible }
     Shortcut { sequence: "Ctrl+Q"; context: Qt.ApplicationShortcut; onActivated: win.close() }
     // Docklight function-key map: F5/F6 communication, F2/F3 logging,
@@ -107,6 +108,13 @@ ApplicationWindow {
         picker.saveFile(qsTr("Save communication log"), qsTr("Log file"), "*.log", "lucidlight.log");
     }
 
+    function printLog() {
+        pickerFlows.openSave = false;
+        pickerFlows.kind = "print";
+        picker.saveFile(qsTr("Print communication window (PDF)"), qsTr("PDF"), "*.pdf",
+                        "lucidlight.pdf");
+    }
+
     // Harness hook: open one of the dialogs by name.
     function openFor(name) {
         if (name === "settings")
@@ -146,6 +154,9 @@ ApplicationWindow {
             if (pickerFlows.openSave && pickerFlows.kind === "script") {
                 if (path !== "")
                     backend.saveScriptTo(path);
+            } else if (!pickerFlows.openSave && pickerFlows.kind === "print") {
+                if (path !== "")
+                    backend.printLogTo(path);
             } else if (pickerFlows.openSave) {
                 if (path !== "") {
                     backend.saveProjectTo(path);
@@ -653,8 +664,12 @@ ApplicationWindow {
         }
         MenuSeparator {}
         MenuItem {
-            text: qsTr("Save communication log…")
+            text: qsTr("Save communication log…") + "  (Ctrl+Shift+S)"
             onTriggered: saveLog()
+        }
+        MenuItem {
+            text: qsTr("Print communication window…") + "  (Ctrl+P)"
+            onTriggered: printLog()
         }
         MenuSeparator {}
         MenuItem {

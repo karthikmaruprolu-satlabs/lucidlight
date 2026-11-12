@@ -43,7 +43,7 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
       toggle; the delta column restarts after the gap)
 - [x] Clear log, freeze/log search (Lucidlight extension)
 - [x] Find in communication window — Ctrl+F field with live highlight + Enter/"Next" jumps row to row (wraps), found row highlighted
-- [ ] Copy/paste per row exists via context menu; full-window print missing
+- [x] Copy/paste per row via context menu; full-window print → Ctrl+P renders the whole window into a PDF (QPdfWriter)
 
 ## Sequences
 - [x] Send sequences: name, data, hotkeys F1-F12, repeat periodically
