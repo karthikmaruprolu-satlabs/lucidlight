@@ -1,4 +1,5 @@
 #include "seriallink.h"
+#include <QDebug>
 
 #include <QElapsedTimer>
 #include <cerrno>
@@ -120,10 +121,24 @@ void SerialLink::applyConfig(const SerialConfig &config) {
     else if (config.flow == 2)
         tio.c_iflag |= IXON | IXOFF;
 
+    // Parity errors: with PARMRK and IGNPAR cleared, a bad byte arrives as
+    // the three-character sequence \377 \0 <byte>, and a real 0x00 data
+    // byte as \377 \377. We decode the triplets in readReady and substitute
+    // the configured ParityErrorChar, exactly like Docklight.
+    if (config.parity != 0 && config.parityErrorChar >= 0) {
+        tio.c_iflag |= PARMRK | INPCK;
+        tio.c_iflag &= ~(IGNPAR | IGNBRK | BRKINT);
+    } else {
+        tio.c_iflag &= ~(PARMRK | INPCK);
+    }
+
     // Non-blocking reads: the socket notifier tells us when data arrived, so
     // VMIN/VTIME stay at zero.
     tio.c_cc[VMIN] = 0;
     tio.c_cc[VTIME] = 0;
+
+    m_decodeParity = config.parity != 0 && config.parityErrorChar >= 0;
+    m_parityErrorChar = config.parityErrorChar;
 
     if (::tcsetattr(m_fd, TCSANOW, &tio) != 0)
         m_lastError = QString::fromLocal8Bit(strerror(errno));
@@ -133,6 +148,39 @@ void SerialLink::applyConfig(const SerialConfig &config) {
 void SerialLink::fail(const QString &message) {
     m_lastError = message;
     emit stateChanged();
+}
+
+// Decodes PARMRK triplets: "\377 \0 X" marks a byte received with a parity
+// error and is replaced by the ParityErrorChar; "\377 \377" is a real 0x00
+// data byte's escape and becomes a single 0xFF... (per termios: a data byte
+// 0xFF is delivered as "\377 \377").
+QByteArray SerialLink::decodeParity(const QByteArray &raw, int parityErrorChar) {
+    QByteArray out;
+    out.reserve(raw.size());
+    const char esc = char(0xFF);
+    const char mark = '\0';
+    for (int i = 0; i < raw.size();) {
+        if (raw.at(i) == esc && i + 2 < raw.size() && raw.at(i + 1) == mark) {
+            // Parity error: substitute the configured character. A negative
+            // ParityErrorChar means "ignore" — keep the raw triplet so the
+            // original character stays visible in the data stream.
+            if (parityErrorChar < 0) {
+                out.append(raw.mid(i, 3));
+            } else {
+                out.append(char(parityErrorChar));
+            }
+            i += 3;
+            continue;
+        }
+        if (raw.at(i) == esc && i + 1 < raw.size() && raw.at(i + 1) == esc) {
+            out.append(esc);   // escaped real 0xFF data byte
+            i += 2;
+            continue;
+        }
+        out.append(raw.at(i));
+        ++i;
+    }
+    return out;
 }
 
 void SerialLink::readReady() {
@@ -153,6 +201,9 @@ void SerialLink::readReady() {
     }
     if (total > 0) {
         chunk.resize(int(total));
+        if (m_decodeParity)
+            chunk = decodeParity(chunk, m_parityErrorChar);
+
         emit received(chunk);
     }
     if (total == 0 && errno == EAGAIN)

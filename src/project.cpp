@@ -22,6 +22,7 @@ QJsonObject Project::save(CommManager *comm, ChannelSettings *a, ChannelSettings
         object["parity"] = settings->parity();
         object["stopBits"] = settings->stopBits();
         object["flow"] = settings->flow();
+        object["parityErrorChar"] = settings->parityErrorChar();
         return object;
     };
     state["channelA"] = channelJson(a);
@@ -77,6 +78,7 @@ QString Project::load(const QJsonObject &state, CommManager *comm, ChannelSettin
         settings->setParity(object.value("parity").toInt(0));
         settings->setStopBits(object.value("stopBits").toInt(1));
         settings->setFlow(object.value("flow").toInt(0));
+        settings->setParityErrorChar(object.value("parityErrorChar").toInt(int('?')));
     };
     applyChannel(a, state.value("channelA"));
     applyChannel(b, state.value("channelB"));

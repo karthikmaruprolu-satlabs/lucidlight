@@ -7,6 +7,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -1455,6 +1456,61 @@ private slots:
                 replied.append(buffer, int(n));
         }
         QVERIFY(replied.contains("PONG"));
+
+        backend.comm()->stop();
+        ::close(master);
+    }
+
+    void parityDecoderSubstitutesErrorChar()
+    {
+        // PARMRK escaping, unit level: "\377 \0 X" marks a byte that
+        // arrived with a parity error and is replaced by the configured
+        // ParityErrorChar; "\377 \377" is a real 0xFF data byte.
+        // Built with explicit lengths: QByteArray(const char *) would stop
+        // at the embedded 0x00 byte.
+        const char errorTriplet[] = {'\xFF', '\x00', '\x41'};
+        const char escapedFF[] = {'\xFF', '\xFF'};
+        const QByteArray raw = QByteArray(errorTriplet, 3)
+                                   + QByteArray(escapedFF, 2) + "B";
+        QCOMPARE(SerialLink::decodeParity(raw, int('?')),
+                 QByteArray("?") + char(0xFF) + "B");
+        QCOMPARE(SerialLink::decodeParity(raw, int('#')),
+                 QByteArray("#") + char(0xFF) + "B");
+        // ParityErrorChar -1 ("ignore" in Docklight) keeps the raw error
+        // triplet, so the original character stays visible, while the
+        // 0xFF escape is still un-doubled.
+        QCOMPARE(SerialLink::decodeParity(raw, -1),
+                 QByteArray("\xFF\x00\x41", 3) + char(0xFF) + "B");
+        // Plain data passes through untouched.
+        QCOMPARE(SerialLink::decodeParity("PING", int('?')), QByteArray("PING"));
+    }
+
+    void parityErrorCharPassesDataThrough()
+    {
+        // With PARMRK active the kernel doubles real 0xFF bytes and our
+        // decoder un-doubles them, so ordinary data (including 0xFF and
+        // 0x00 bytes) must come out exactly as it went in. A pty cannot
+        // inject real parity errors, so the '?' substitution itself is
+        // covered by parityDecoderSubstitutesErrorChar above.
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        backend.channelA()->setParity(1);   // even; enables PARMRK decoding
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        const char rawData[] = {'\xFF', '\x00', '\x41', '\xFF', '\xFF', '\x42'};
+        const QByteArray raw(rawData, 6);
+        QCOMPARE(::write(master, raw.constData(), raw.size()), qsizetype(raw.size()));
+        QTest::qWait(300);
+
+        QString hex;
+        for (int i = 0; i < backend.log()->count(); ++i)
+            hex += backend.log()->hexAt(i) + ' ';
+        QVERIFY2(hex.contains("FF 00 41 FF FF 42"), qPrintable(hex));
 
         backend.comm()->stop();
         ::close(master);

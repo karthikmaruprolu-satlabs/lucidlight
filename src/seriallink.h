@@ -43,6 +43,11 @@ public:
     // Human-readable Bxxxx constant for a numeric baud rate.
     static speed_t speedConstant(int baud, bool *known);
 
+    // Decodes PARMRK escapes: "\377 \0 X" is a byte received with a parity
+    // error and becomes the ParityErrorChar; "\377 \377" is a real 0xFF
+    // data byte. Public so tests can exercise it without hardware.
+    static QByteArray decodeParity(const QByteArray &raw, int parityErrorChar);
+
 private:
     void readReady();
     void applyConfig(const SerialConfig &config);
@@ -52,6 +57,8 @@ private:
     QString m_device;
     QString m_lastError;
     int m_parity = 0;
+    int m_parityErrorChar = int('?');
+    bool m_decodeParity = false;   // PARMRK decoding active (parity + error char)
     termios m_savedTermios {};
     bool m_savedValid = false;
     QSocketNotifier *m_notifier = nullptr;

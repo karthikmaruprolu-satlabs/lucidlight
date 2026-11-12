@@ -644,13 +644,14 @@ QString Backend::scriptChannelSettings(int channel) {
         return config.device;
     static const char *parityNames[] = {"NONE", "EVEN", "ODD", "MARK", "SPACE"};
     static const char *flowNames[] = {"OFF", "RTSCTS", "XONXOFF", "RTSSEND"};
-    return QStringLiteral("%1:%2,%3,%4,%5,%6")
+    return QStringLiteral("%1:%2,%3,%4,%5,%6,%7")
         .arg(config.device,
              QString::number(config.baud),
              parityNames[qBound(0, config.parity, 4)],
              QString::number(config.dataBits),
              QString::number(config.stopBits),
-             flowNames[qBound(0, config.flow, 3)]);
+             flowNames[qBound(0, config.flow, 3)],
+             QString::number(config.parityErrorChar));
 }
 
 bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
@@ -715,6 +716,12 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
         else if (flow == "XONXOFF") flowValue = 2;
         if (flowValue >= 0)
             target->setFlow(flowValue);
+        if (parts.size() >= 6) {
+            bool pecOk = false;
+            const int pec = parts.value(5).trimmed().toInt(&pecOk);
+            if (pecOk && pec >= 0 && pec <= 255)
+                target->setParityErrorChar(pec);
+        }
     }
     // Network device strings carry their own configuration; accept them as
     // they are. A serial device is probed before the settings stick.

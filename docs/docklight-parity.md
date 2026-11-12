@@ -27,7 +27,7 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [x] Baud 300..4000000, data bits 5-8, parity none/odd/even/mark/space,
       stop bits 1/1.5/2, flow off/RTSCTS/XONXOFF, RTS toggle/DTR toggle,
       break condition
-- [ ] Parity error replacement character (ParityErrorChar, default 63)
+- [x] Parity error replacement character (ParityErrorChar, default 63) — termios PARMRK decoding; settings UI field, project persistence, DL channel-settings string field 6, "(ignore)" keeps the raw triplet
 
 ## Communication window
 - [x] Four representations: ASCII/HEX/DEC/Binary (Binary also parses for

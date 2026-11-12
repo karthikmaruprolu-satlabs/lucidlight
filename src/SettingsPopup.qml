@@ -177,6 +177,40 @@ Popup {
                         backend.channelB.flow = flow;
                 }
             }
+
+            // Docklight's ParityErrorChar: the character shown for bytes
+            // that arrive with a parity error (only meaningful with parity).
+            Label {
+                text: qsTr("Parity error char")
+                color: theme.muted
+                font.pixelSize: 12
+                visible: (root.channel === 0 ? backend.channelA.parity
+                                             : backend.channelB.parity) !== 0
+            }
+            ComboBox {
+                id: pecBox
+                visible: (root.channel === 0 ? backend.channelA.parity
+                                             : backend.channelB.parity) !== 0
+                font.pixelSize: 12
+                textRole: "label"
+                valueRole: "value"
+                model: [
+                    { label: qsTr("?"), value: 63 },
+                    { label: qsTr("@"), value: 64 },
+                    { label: qsTr("#"), value: 35 },
+                    { label: qsTr("$"), value: 36 },
+                    { label: qsTr("(space)"), value: 32 },
+                    { label: qsTr("(off)"), value: -1 }
+                ]
+                onActivated: (index) => setPec(model[index].value)
+
+                function setPec(pec) {
+                    if (root.channel === 0)
+                        backend.channelA.parityErrorChar = pec;
+                    else
+                        backend.channelB.parityErrorChar = pec;
+                }
+            }
         }
 
         // Sync the boxes with the settings each time the popup opens.
@@ -195,6 +229,9 @@ Popup {
             for (let j = 0; j < flowBox.model.length; ++j)
                 if (flowBox.model[j].value === settings.flow)
                     flowBox.currentIndex = j;
+            for (let k = 0; k < pecBox.model.length; ++k)
+                if (pecBox.model[k].value === settings.parityErrorChar)
+                    pecBox.currentIndex = k;
         }
     }
 

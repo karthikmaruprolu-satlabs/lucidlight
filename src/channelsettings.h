@@ -15,6 +15,7 @@ class ChannelSettings : public QObject {
     Q_PROPERTY(int parity READ parity WRITE setParity NOTIFY changed)
     Q_PROPERTY(int stopBits READ stopBits WRITE setStopBits NOTIFY changed)
     Q_PROPERTY(int flow READ flow WRITE setFlow NOTIFY changed)
+    Q_PROPERTY(int parityErrorChar READ parityErrorChar WRITE setParityErrorChar NOTIFY changed)
 
 public:
     explicit ChannelSettings(QObject *parent = nullptr) : QObject(parent) {}
@@ -31,9 +32,13 @@ public:
     void setStopBits(int bits) { if (bits != m_stopBits) { m_stopBits = bits; emit changed(); } }
     int flow() const { return m_flow; }
     void setFlow(int flow) { if (flow != m_flow) { m_flow = flow; emit changed(); } }
+    int parityErrorChar() const { return m_parityErrorChar; }
+    void setParityErrorChar(int ch) {
+        if (ch != m_parityErrorChar) { m_parityErrorChar = ch; emit changed(); }
+    }
 
     SerialConfig config() const {
-        return {m_device, m_baud, m_dataBits, m_parity, m_stopBits, m_flow};
+        return {m_device, m_baud, m_dataBits, m_parity, m_stopBits, m_flow, m_parityErrorChar};
     }
 
 signals:
@@ -46,4 +51,5 @@ private:
     int m_parity = 0;
     int m_stopBits = 1;
     int m_flow = 0;
+    int m_parityErrorChar = int('?');
 };

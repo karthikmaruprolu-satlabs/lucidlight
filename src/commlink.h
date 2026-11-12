@@ -12,9 +12,11 @@ struct SerialConfig {
     int parity = 0;            // 0 none, 1 even, 2 odd, 3 mark, 4 space
     int stopBits = 1;          // 1 or 2
     int flow = 0;              // 0 none, 1 hardware RTS/CTS, 2 software Xon/Xoff
+    int parityErrorChar = int('?');   // Docklight's ParityErrorChar replacement
     bool operator==(const SerialConfig &o) const {
         return device == o.device && baud == o.baud && dataBits == o.dataBits && parity == o.parity
-               && stopBits == o.stopBits && flow == o.flow;
+               && stopBits == o.stopBits && flow == o.flow
+               && parityErrorChar == o.parityErrorChar;
     }
 };
 
