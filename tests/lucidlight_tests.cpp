@@ -1155,6 +1155,44 @@ private slots:
         QVERIFY(fromLink.contains("datagram"));
     }
 
+    void udpSplitPorts()
+    {
+        // UDP:host:port:localPort sends to the remote endpoint while
+        // receiving on the separate local port.
+        QUdpSocket remote;
+        QVERIFY(remote.bind(QHostAddress::LocalHost));
+        const quint16 remotePort = remote.localPort();
+
+        NetLink link;
+        SerialConfig config;
+        // Pick a free local port for the split receive side.
+        QUdpSocket probe;
+        QVERIFY(probe.bind(QHostAddress::LocalHost));
+        const quint16 localPort = probe.localPort();
+        probe.close();
+        config.device = QStringLiteral("UDP:127.0.0.1:%1:%2").arg(remotePort).arg(localPort);
+        QVERIFY(link.open(config));
+        QCOMPARE(link.write("split"), qint64(5));
+
+        QEventLoop loop;
+        QByteArray got;
+        QTimer::singleShot(2000, &loop, &QEventLoop::quit);
+        QObject::connect(&remote, &QUdpSocket::readyRead, [&] {
+            while (remote.hasPendingDatagrams()) {
+                QByteArray d;
+                d.resize(int(remote.pendingDatagramSize()));
+                remote.readDatagram(d.data(), d.size());
+                got += d;
+            }
+            if (got.contains("split"))
+                loop.quit();
+        });
+        loop.exec();
+        QVERIFY(got.contains("split"));
+
+        QVERIFY(link.write("still open") > 0);
+    }
+
     void commManagerRoutesTcpChannel()
     {
         // The full CommManager path with a TCP channel A and an echo server.

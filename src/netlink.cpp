@@ -84,14 +84,22 @@ bool NetLink::open(const SerialConfig &config) {
         m_udp = new QUdpSocket(this);
         connectSignals();
         const QString spec = m_device.mid(4);
-        const int colon = spec.lastIndexOf(QLatin1Char(':'));
-        if (colon > 0) {
-            // UDP:host:port — peer with a fixed remote endpoint.
+        // UDP:host:port[:localPort] — peer with a fixed remote endpoint and
+        // optionally a split local receive port, like Docklight's split UDP.
+        const QStringList parts = spec.split(':');
+        if (parts.size() >= 2) {
             m_kind = UdpPeer;
-            m_host = spec.left(colon);
-            m_port = spec.mid(colon + 1).toInt();
+            m_host = parts.at(0);
+            m_port = parts.at(1).toInt();
+            const int localPort = parts.value(2).toInt();
             if (m_port <= 0 || m_port > 65535) {
                 fail(QObject::tr("UDP device needs a valid port"));
+                close();
+                return false;
+            }
+            if (localPort > 0 && !m_udp->bind(QHostAddress::Any, quint16(localPort))) {
+                fail(QObject::tr("Cannot bind UDP port %1: %2")
+                         .arg(QString::number(localPort), m_udp->errorString()));
                 close();
                 return false;
             }

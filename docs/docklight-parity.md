@@ -14,9 +14,10 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [x] Communication Mode: Monitoring (2 ports, receive only, data forwarding)
 - [~] Serial COM ports — /dev/tty* via termios, incl. 9 data bits oddities
 - [x] TCP client (`TCP:host:port`), TCP server (`SERVER:port`, status 2 while
-      listening) — TCP PROXY not yet
-- [x] UDP peer (`UDP:host:port`), UDP server (`UDP:port` binds, answers the
-      last sender) — split-port UDP not yet
+      listening). Docklight's TCP PROXY is monitoring mode with two TCP
+      endpoints, which Monitor mode already provides.
+- [x] UDP peer (`UDP:host:port[:localPort]` with split ports), UDP server
+      (`UDP:port` binds, answers the last sender)
 - [n/a] Docklight TAP / VTP hardware taps (Windows-only hardware)
 - [n/a] USB HID (needs hidapi; not installed)
 - [~] Named pipes — planned as Unix domain sockets / FIFOs
