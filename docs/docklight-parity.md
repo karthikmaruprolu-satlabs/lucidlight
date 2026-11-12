@@ -134,7 +134,8 @@ not source-compatible, but the DL API names and semantics are replicated.
 ## Program options / project
 - [x] Project save/load (.llproj ≈ .ptp)
 - [x] Session restore, unsaved-changes guard
-- [ ] Startup script auto-run (project option)
+- [x] Startup script auto-run (project option, "Run on open"; headless runner
+      executes the project script when no --script is given)
 - [x] Program options save/load via DL.Load/SaveProgramOptions (JSON store)
 
 ## Hot keys (F1 help, Ctrl+N/O/S/P, F5/F6 comm, F2/F3 logging,

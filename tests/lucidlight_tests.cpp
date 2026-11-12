@@ -169,6 +169,31 @@ private slots:
         QCOMPARE(model.count(), 0);
     }
 
+    void projectAutoRunOption()
+    {
+        // runOnOpen survives save/load, and the headless runner executes the
+        // project script when no explicit script is given.
+        Backend backend;
+        backend.setScriptSource("DL.Comment('auto-ran'); 1;");
+        backend.setRunOnOpen(true);
+        QTemporaryDir dir;
+        const QString path = dir.path() + "/autorun.llproj";
+        backend.saveProjectTo(path);
+        QVERIFY(QFile::exists(path));
+
+        Backend loaded;
+        loaded.openProjectFrom(path);
+        QVERIFY(loaded.runOnOpen());
+        QCOMPARE(loaded.scriptSource().contains("auto-ran"), true);
+
+        // Round 2: option off stays off.
+        backend.setRunOnOpen(false);
+        backend.saveProjectTo(path);
+        Backend reloaded;
+        reloaded.openProjectFrom(path);
+        QVERIFY(!reloaded.runOnOpen());
+    }
+
     // ---- communication manager -------------------------------------------------
     void managerRequiresAPort()
     {

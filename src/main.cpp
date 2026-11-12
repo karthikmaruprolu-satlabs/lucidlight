@@ -104,6 +104,11 @@ int runHeadless(const QString &projectPath, const QString &scriptPath, int durat
         }
         scriptCode = QString::fromUtf8(file.readAll());
     }
+    // A project with the run-on-open option and no explicit script runs the
+    // project's own script, like Docklight's automation.
+    if (scriptCode.isEmpty() && backend.runOnOpen()
+        && !backend.scriptSource().trimmed().isEmpty())
+        scriptCode = backend.scriptSource();
 
     QEventLoop loop;
     QTimer::singleShot(qMax(1, durationSec) * 1000, &loop, &QEventLoop::quit);

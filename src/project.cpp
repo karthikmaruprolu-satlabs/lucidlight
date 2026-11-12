@@ -8,7 +8,8 @@
 #include "sequencemodel.h"
 
 QJsonObject Project::save(CommManager *comm, ChannelSettings *a, ChannelSettings *b,
-                          SequenceModel *sequences, const QString &script, CommLog *log) {
+                          SequenceModel *sequences, const QString &script, CommLog *log,
+                          bool runOnOpen, const QString &scriptFile) {
     QJsonObject state;
     state["version"] = 1;
     state["mode"] = comm->mode();
@@ -47,6 +48,10 @@ QJsonObject Project::save(CommManager *comm, ChannelSettings *a, ChannelSettings
     }
     state["sequences"] = sequenceArray;
     state["script"] = script;
+    QJsonObject automation;
+    automation["runOnOpen"] = runOnOpen;
+    automation["scriptFile"] = scriptFile;
+    state["automation"] = automation;
 
     QJsonObject display;
     display["format"] = Project::displayFormatName(log->displayFormat());
@@ -57,7 +62,8 @@ QJsonObject Project::save(CommManager *comm, ChannelSettings *a, ChannelSettings
 }
 
 QString Project::load(const QJsonObject &state, CommManager *comm, ChannelSettings *a,
-                      ChannelSettings *b, SequenceModel *sequences, QString *script, CommLog *log) {
+                      ChannelSettings *b, SequenceModel *sequences, QString *script, CommLog *log,
+                      bool *runOnOpen, QString *scriptFile) {
     if (state.value("version").toInt() != 1)
         return QObject::tr("Not a Lucidlight project file");
 
@@ -100,6 +106,11 @@ QString Project::load(const QJsonObject &state, CommManager *comm, ChannelSettin
 
     if (script)
         *script = state.value("script").toString();
+    const QJsonObject automation = state.value("automation").toObject();
+    if (runOnOpen)
+        *runOnOpen = automation.value("runOnOpen").toBool(false);
+    if (scriptFile)
+        *scriptFile = automation.value("scriptFile").toString();
 
     const QJsonObject display = state.value("display").toObject();
     log->setDisplayFormat(Project::displayFormatFromName(display.value("format").toString()));

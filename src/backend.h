@@ -34,6 +34,8 @@ class Backend : public QObject {
     Q_PROPERTY(PortEnumerator *ports READ ports CONSTANT)
     Q_PROPERTY(PortalPicker *picker READ picker CONSTANT)
     Q_PROPERTY(QString scriptSource READ scriptSource WRITE setScriptSource NOTIFY scriptChanged)
+    // Docklight's project option: run the script when the project opens.
+    Q_PROPERTY(bool runOnOpen READ runOnOpen WRITE setRunOnOpen NOTIFY stateChanged)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -55,6 +57,11 @@ public:
     PortalPicker *picker() const { return m_picker; }
     QString scriptSource() const { return m_scriptSource; }
     void setScriptSource(const QString &source);
+    bool runOnOpen() const;
+    void setRunOnOpen(bool on);
+    void runScriptFile(const QString &path);
+    // Runs script text directly (the script panel calls scripts.run).
+    Q_INVOKABLE void runScript(const QString &source);
 
     // ---- actions from QML -------------------------------------------------
     Q_INVOKABLE void toggleComm();
@@ -164,6 +171,7 @@ private:
     bool m_dirty = false;
     QString m_projectPath;
     QString m_scriptSource;
+    bool m_runOnOpen = false;
     bool m_pendingHighlight = false;
 
     QHash<int, int> m_receiveCounts;   // Docklight Receive Sequence hit counters

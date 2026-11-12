@@ -70,6 +70,24 @@ ColumnLayout {
             color: backend.scripts.running ? theme.yellow : theme.muted
             font.pixelSize: 11
         }
+        // Docklight's project option: run this script on project open.
+        CheckBox {
+            id: autoRun
+            checked: backend.runOnOpen
+            text: qsTr("Run on open")
+            font.pixelSize: 11
+            contentItem: Label {
+                text: autoRun.text
+                font.pixelSize: 11
+                color: theme.muted
+                leftPadding: autoRun.indicator.width + autoRun.spacing
+                verticalAlignment: Text.AlignVCenter
+            }
+            onToggled: backend.runOnOpen = checked
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Run this script automatically when the project is opened")
+            ToolTip.delay: 600
+        }
         Label {
             text: qsTr("DL.Send · DL.ReceiveStr · DL.Wait · DL.Comment …")
             color: Qt.alpha(theme.muted, 0.6)

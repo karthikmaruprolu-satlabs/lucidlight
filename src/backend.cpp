@@ -95,6 +95,18 @@ QString Backend::commStateText() const {
         .arg(QString::number(m_comm->txBytes()), QString::number(m_comm->rxBytes()));
 }
 
+bool Backend::runOnOpen() const {
+    return m_runOnOpen;
+}
+
+void Backend::setRunOnOpen(bool on) {
+    if (on == m_runOnOpen)
+        return;
+    m_runOnOpen = on;
+    setDirty(true);
+    emit stateChanged();
+}
+
 void Backend::setScriptSource(const QString &source) {
     if (source == m_scriptSource)
         return;
@@ -850,6 +862,23 @@ void Backend::scriptSendSequenceDone() {
     // The worker parks on this counter; nothing else to do here.
 }
 
+void Backend::runScript(const QString &source) {
+    if (source.trimmed().isEmpty())
+        return;
+    m_runner->run(source);
+}
+
+void Backend::runScriptFile(const QString &path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        emit toast(tr("Cannot open script %1").arg(path));
+        return;
+    }
+    const QString code = QString::fromUtf8(file.readAll());
+    emit toast(tr("Startup script: %1").arg(path));
+    m_runner->run(code);
+}
+
 QString Backend::scriptPortList() {
     return m_ports->ports().join(QLatin1Char('\n'));
 }
@@ -981,15 +1010,28 @@ void Backend::openProjectFrom(const QString &path) {
         return;
     }
     QString script;
-    const QString error = Project::load(state, m_comm, m_a, m_b, m_sequences, &script, m_log);
+    bool runOnOpen = false;
+    QString scriptFile;
+    const QString error = Project::load(state, m_comm, m_a, m_b, m_sequences, &script, m_log,
+                                        &runOnOpen, &scriptFile);
     if (!error.isEmpty()) {
         emit toast(error);
         return;
     }
     setScriptSource(script);
     setProjectPath(path);
+    m_runOnOpen = runOnOpen;
+    emit stateChanged();
     setDirty(false);
     emit toast(tr("Project opened"));
+    // Docklight's "run script on project open" option. A script file
+    // reference wins over the embedded source.
+    if (runOnOpen) {
+        if (!scriptFile.isEmpty())
+            runScriptFile(scriptFile);
+        else if (!m_scriptSource.trimmed().isEmpty())
+            runScript(m_scriptSource);
+    }
 }
 
 void Backend::saveProjectTo(const QString &path) {
@@ -1002,7 +1044,7 @@ void Backend::saveProjectTo(const QString &path) {
         return;
     }
     const QJsonObject state =
-        Project::save(m_comm, m_a, m_b, m_sequences, m_scriptSource, m_log);
+        Project::save(m_comm, m_a, m_b, m_sequences, m_scriptSource, m_log, m_runOnOpen);
     file.write(QJsonDocument(state).toJson(QJsonDocument::Indented));
     if (!file.commit()) {
         emit toast(tr("Cannot write %1").arg(finalPath));
@@ -1021,7 +1063,7 @@ void Backend::saveSession() {
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return;
     const QJsonObject state =
-        Project::save(m_comm, m_a, m_b, m_sequences, m_scriptSource, m_log);
+        Project::save(m_comm, m_a, m_b, m_sequences, m_scriptSource, m_log, m_runOnOpen);
     file.write(QJsonDocument(state).toJson(QJsonDocument::Compact));
     file.commit();
     setDirty(false);
