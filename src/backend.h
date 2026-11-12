@@ -91,6 +91,7 @@ private slots:
 private:
     void wireDirtyTracking();
     void applyTrigger(const Sequence *receiveSequence, const QByteArray &matched);
+    void syncMatcher();
 
     CommManager *m_comm;
     ChannelSettings *m_a;

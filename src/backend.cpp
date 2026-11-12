@@ -32,12 +32,15 @@ Backend::Backend(QObject *parent)
             m_log->startClock();
             m_repeatClock.start();
             m_nextRepeatAt.clear();
+            m_matcher.reset();
         }
         emit stateChanged();
     });
     connect(m_comm, &CommManager::countersChanged, this, &Backend::stateChanged);
     connect(m_log, &CommLog::displayChanged, this, &Backend::stateChanged);
     connect(&m_matcher, &SequenceMatcher::matched, this, &Backend::handleTrigger);
+    connect(m_sequences, &SequenceModel::sequenceChanged, this, &Backend::syncMatcher);
+    syncMatcher();
 
     m_repeatTimer.setInterval(100);
     connect(&m_repeatTimer, &QTimer::timeout, this, &Backend::checkRepeats);
@@ -138,6 +141,25 @@ void Backend::applyTrigger(const Sequence *receiveSequence, const QByteArray &ma
     }
     m_log->appendEvent(tr("Trigger %1: reply sequence missing").arg(receiveSequence->name));
     Q_UNUSED(matched)
+}
+
+// Rebuild the receive-trigger patterns from the sequence table. Called at
+// startup and whenever the table changes.
+void Backend::syncMatcher() {
+    QVector<SequenceMatcher::Pattern> patterns;
+    for (const Sequence &seq : m_sequences->sequences()) {
+        if (seq.isSend || !seq.enabled)
+            continue;
+        const auto parsed = DataFormat::parse(seq.data, seq.format);
+        if (!parsed.ok() || parsed.bytes.isEmpty())
+            continue;
+        SequenceMatcher::Pattern pattern;
+        pattern.sequenceId = seq.id;
+        pattern.bytes = parsed.bytes;
+        pattern.wildcard = parsed.wildcard;
+        patterns.append(pattern);
+    }
+    m_matcher.setPatterns(patterns);
 }
 
 // ---------------------------------------------------------------------------

@@ -602,6 +602,260 @@ private slots:
         QCOMPARE(translator.translate("Main", "%n byte(s)", nullptr, 5), QString("%n байтов"));
     }
 
+    // ---- full-stack mode tests over pseudo terminals -----------------------
+    // Creates a pty pair; returns the master fd and the slave path.
+    static int makePty(char *slaveName, size_t size)
+    {
+        int master = posix_openpt(O_RDWR | O_NOCTTY);
+        if (master < 0)
+            return -1;
+        if (grantpt(master) != 0 || unlockpt(master) != 0) {
+            ::close(master);
+            return -1;
+        }
+        if (ptsname_r(master, slaveName, size) != 0) {
+            ::close(master);
+            return -1;
+        }
+        // Non-blocking: the tests poll the master and must not park in read()
+        // while no data has arrived yet.
+        fcntl(master, F_SETFL, fcntl(master, F_GETFL) | O_NONBLOCK);
+        return master;
+    }
+
+    void modeRedirectRoutesTxToAAndRxFromB()
+    {
+        char slaveA[128], slaveB[128];
+        int masterA = makePty(slaveA, sizeof(slaveA));
+        int masterB = makePty(slaveB, sizeof(slaveB));
+        QVERIFY(masterA >= 0 && masterB >= 0);
+
+        Backend backend;
+        backend.comm()->setMode(CommManager::Redirect);
+        backend.channelA()->setDevice(slaveA);
+        backend.channelB()->setDevice(slaveB);
+        QVERIFY(backend.comm()->start(backend.channelA()->config(), backend.channelB()->config()));
+
+        // What Lucidlight sends must leave on port A.
+        QVERIFY(backend.sendText("GO", 0));
+        char buffer[64];
+        QByteArray onA;
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 500 && !onA.contains("GO")) {
+            QCoreApplication::processEvents();
+            const ssize_t n = ::read(masterA, buffer, sizeof(buffer));
+            if (n > 0)
+                onA.append(buffer, int(n));
+        }
+        QVERIFY(onA.contains("GO"));
+
+        // A device answering on port B must arrive as RX.
+        QByteArray received;
+        QEventLoop loop;
+        QTimer::singleShot(1000, &loop, &QEventLoop::quit);
+        QObject::connect(backend.comm(), &CommManager::incoming, [&](int channel, const QByteArray &data) {
+            if (channel == 1)
+                received.append(data);
+        });
+        QCOMPARE(::write(masterB, "OK", 2), 2);
+        loop.exec();
+        QVERIFY(received.contains("OK"));
+
+        backend.comm()->stop();
+        ::close(masterA);
+        ::close(masterB);
+    }
+
+    void modeMonitorTapsBothSidesAndBlocksSends()
+    {
+        char slaveA[128], slaveB[128];
+        int masterA = makePty(slaveA, sizeof(slaveA));
+        int masterB = makePty(slaveB, sizeof(slaveB));
+        QVERIFY(masterA >= 0 && masterB >= 0);
+
+        Backend backend;
+        backend.comm()->setMode(CommManager::Monitor);
+        backend.channelA()->setDevice(slaveA);
+        backend.channelB()->setDevice(slaveB);
+        QVERIFY(backend.comm()->start(backend.channelA()->config(), backend.channelB()->config()));
+
+        QEventLoop loop;
+        QTimer::singleShot(1000, &loop, &QEventLoop::quit);
+        int fromA = 0, fromB = 0;
+        QObject::connect(backend.comm(), &CommManager::incoming, [&](int channel, const QByteArray &) {
+            if (channel == 0)
+                fromA++;
+            else
+                fromB++;
+        });
+        QCOMPARE(::write(masterA, "one", 3), 3);
+        QCOMPARE(::write(masterB, "two", 3), 3);
+        loop.exec();
+        QCOMPARE(fromA, 1);
+        QCOMPARE(fromB, 1);
+        QVERIFY(!backend.sendText("nope", 0));  // monitor is read-only
+
+        backend.comm()->stop();
+        ::close(masterA);
+        ::close(masterB);
+    }
+
+    void portSettingsReachTheLine()
+    {
+        // The pty carries the termios state both ends share, so the master
+        // side reveals what applyConfig actually programmed.
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        SerialLink link;
+        SerialConfig config;
+        config.device = slave;
+        config.baud = 9600;
+        config.dataBits = 7;
+        config.parity = 2;   // odd
+        config.stopBits = 2;
+        config.flow = 2;     // Xon/Xoff
+        QVERIFY(link.open(config));
+
+        termios tio {};
+        QVERIFY(tcgetattr(master, &tio) == 0);
+        QCOMPARE(int(cfgetospeed(&tio)), int(B9600));
+        // Linux ptys normalize the character size to 8 bits and drop parity
+        // (they have no UART), so only what a pty genuinely reflects is
+        // asserted here; the CSIZE/parity programming is exercised by real
+        // hardware.
+        QVERIFY(tio.c_cflag & CSTOPB);
+        QVERIFY(tio.c_iflag & IXON);
+        QVERIFY(tio.c_iflag & IXOFF);
+        QVERIFY(!(tio.c_cflag & CRTSCTS));
+        link.close();
+        ::close(master);
+    }
+
+    void receiveTriggerAutoReplies()
+    {
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        // Receive "PING" -> reply with "PONG".
+        const int replyRow = backend.sequences()->add(
+            QVariantMap{{"name", "Reply"}, {"isSend", true}, {"format", 0}, {"data", "PONG"}});
+        const int replyId = backend.sequences()->get(replyRow)["seqId"].toInt();
+        backend.sequences()->add(QVariantMap{{"name", "Watch"}, {"isSend", false}, {"format", 0},
+                                             {"data", "PING"}, {"replyToId", replyId}});
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        // The device sends PING; the trigger must answer PONG on the port.
+        QCOMPARE(::write(master, "PING", 4), 4);
+        QByteArray replied;
+        char buffer[64];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1500 && !replied.contains("PONG")) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            const ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0)
+                replied.append(buffer, int(n));
+        }
+        QVERIFY(replied.contains("PONG"));
+
+        backend.comm()->stop();
+        ::close(master);
+    }
+
+    void sequenceRepeatSendsPeriodically()
+    {
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        const int row = backend.sequences()->add(
+            QVariantMap{{"name", "Tick"}, {"isSend", true}, {"format", 0},
+                        {"data", "T"}, {"repeatIntervalMs", 100}});
+        backend.toggleComm();   // starts communication and the repeat clock
+        QVERIFY(backend.comm()->running());
+
+        backend.sendSequence(row);   // first send + arms the repeat
+        QByteArray seen;
+        char buffer[64];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1200) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 30);
+            const ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0)
+                seen.append(buffer, int(n));
+        }
+        // First send plus repeats at 100 ms: comfortably more than three.
+        QVERIFY(seen.count('T') >= 4);
+
+        backend.sendSequence(row);   // disarms the repeat
+        backend.comm()->stop();
+        ::close(master);
+    }
+
+    void scriptEchoesThroughRealPort()
+    {
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        CommManager manager;
+        SequenceModel sequences;
+        SerialConfig config;
+        config.device = slave;
+        manager.start(config, SerialConfig());
+
+        ScriptRunner runner(&manager, &sequences);
+        QString lastLine;
+        bool finishedOk = false;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::outputLine, [&](const QString &line, bool error) {
+            if (!error)
+                lastLine = line;
+        });
+        connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &) {
+            finishedOk = ok;
+            loop.quit();
+        });
+        runner.run("DL.StartCommunication();"
+                   "DL.SendStr(\"hello device\\r\\n\");"
+                   "var line = DL.ReceiveLine(2000);"
+                   "print(line);"
+                   "DL.Assert(line === \"hello device\", \"echo mismatch\");");
+        QTest::qWait(200);
+        QVERIFY(runner.engine());
+
+        // The remote end echoes every line back, like a real device.
+        QByteArray pending;
+        char buffer[64];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 3000 && !finishedOk) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 30);
+            ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0) {
+                pending.append(buffer, int(n));
+                if (pending.endsWith('\n')) {
+                    ::write(master, pending.constData(), pending.size());
+                    pending.clear();
+                }
+            }
+        }
+        QVERIFY(finishedOk);
+        QCOMPARE(lastLine, QString("hello device"));
+        manager.stop();
+        ::close(master);
+    }
+
 private:
     static void write(const QString &path, const QByteArray &contents)
     {
