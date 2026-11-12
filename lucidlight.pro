@@ -10,6 +10,7 @@ HEADERS += \
     src/seriallink.h \
     src/portenumerator.h \
     src/dataformat.h \
+    src/checksum.h \
     src/commlog.h \
     src/commmanager.h \
     src/channelsettings.h \
@@ -28,6 +29,7 @@ SOURCES += \
     src/seriallink.cpp \
     src/portenumerator.cpp \
     src/dataformat.cpp \
+    src/checksum.cpp \
     src/commlog.cpp \
     src/commmanager.cpp \
     src/channelsettings.cpp \

@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "backend.h"
+#include "checksum.h"
 #include "commmanager.h"
 #include "dataformat.h"
 #include "dlscript.h"
@@ -699,6 +700,99 @@ private slots:
         backend.comm()->stop();
         ::close(masterA);
         ::close(masterB);
+    }
+
+    void checksumSpecParsing()
+    {
+        // Predefined names resolve to their documented generic definitions.
+        const Checksum::Spec modbus = Checksum::parse("CRC-MODBUS");
+        QVERIFY(modbus.valid);
+        QCOMPARE(modbus.width, 16);
+        QCOMPARE(modbus.polynomial, 0x8005u);
+        QCOMPARE(modbus.init, 0xFFFFu);
+        QVERIFY(modbus.reflectIn && modbus.reflectOut);
+
+        // Same algorithm, spelled out in the generic syntax.
+        const Checksum::Spec generic =
+            Checksum::parse("CRC:16,8005,FFFF,0000,Yes,Yes");
+        QVERIFY(generic.valid);
+        QCOMPARE(generic.width, 16);
+        QCOMPARE(generic.polynomial, 0x8005u);
+
+        QVERIFY(!Checksum::parse("NOPE").valid);
+        QVERIFY(!Checksum::parse("").valid);
+        QVERIFY(!Checksum::parse("CRC:33,1,2,3,Yes,Yes").valid);
+        QVERIFY(!Checksum::parse("CRC:16,zz,0,0,No,No").valid);
+    }
+
+    void checksumVerifyAgainstManual()
+    {
+        // All expected values are quoted in the Docklight manual for the
+        // ASCII test string "123456789" (Checksum Specification reference).
+        const QByteArray data = "123456789";
+        QCOMPARE(Checksum::compute("MOD256", data).toHex().toUpper(),
+                 QByteArray("DD"));
+        QCOMPARE(Checksum::compute("CRC-DOW", data).toHex().toUpper(),
+                 QByteArray("A1"));
+        QCOMPARE(Checksum::compute("CRC-16", data).toHex().toUpper(),
+                 QByteArray("BB3D"));
+        QCOMPARE(Checksum::compute("CRC-MODBUS", data).toHex().toUpper(),
+                 QByteArray("4B37"));   // little-endian byte order in the result
+        QCOMPARE(Checksum::compute("CRC-CCITT", data).toHex().toUpper(),
+                 QByteArray("29B1"));
+        QCOMPARE(Checksum::compute("CRC-32", data).toHex().toUpper(),
+                 QByteArray("CBF43926"));
+        // CRC-8 for "123456789" is the classic check value F4.
+        QCOMPARE(Checksum::compute("CRC-8", data).toHex().toUpper(),
+                 QByteArray("F4"));
+        // XOR of "123456789": 31^32^...^39
+        QCOMPARE(Checksum::compute("XOR", data).at(0), char(0x31 ^ 0x32 ^ 0x33
+                     ^ 0x34 ^ 0x35 ^ 0x36 ^ 0x37 ^ 0x38 ^ 0x39));
+        // LRC: two's complement of the MOD256 sum, so total = 0.
+        const QByteArray lrc = Checksum::compute("LRC", data);
+        const int sum = 0x31 + 0x32 + 0x33 + 0x34 + 0x35 + 0x36 + 0x37 + 0x38
+                        + 0x39 + uchar(lrc.at(0));
+        QCOMPARE(sum % 256, 0);
+    }
+
+    void checksumLittleEndian()
+    {
+        // CRC-MODBUS with the L modifier stores the lower byte first.
+        Checksum::Area area = Checksum::parseArea("CRC-MODBUS L # Modbus RTU");
+        QVERIFY(area.ok);
+        QVERIFY(area.littleEndian);
+        QByteArray sequence = QByteArray::fromHex("010601020007FFFF");
+        QString err;
+        QVERIFY(Checksum::applyToSequence(area, sequence, &err));
+        // The manual documents the resulting Modbus RTU frame: 01 06 01 02
+        // 00 07 68 34.
+        QCOMPARE(sequence.toHex().toUpper(), QByteArray("0106010200076834"));
+        QVERIFY(Checksum::validateSequence(area, sequence, nullptr));
+    }
+
+    void checksumAsciiResult()
+    {
+        // MODBUS ASCII: LRC-ASCII over the readable hex payload, result
+        // rendered as two ASCII hex characters placed before CR/LF.
+        Checksum::Area area = Checksum::parseArea("(2,-5) LRC-ASCII A @ -4 # modbus ascii");
+        QVERIFY(area.ok);
+        // ":1103006B0003" + result + CR LF, where the manual shows 7E.
+        QByteArray sequence = ":1103006b0003" + QByteArray("XX") + "\r\n";
+        QVERIFY(Checksum::applyToSequence(area, sequence, nullptr));
+        QCOMPARE(QString::fromLatin1(sequence), QString(":1103006b00037E\r\n"));
+        QVERIFY(Checksum::validateSequence(area, sequence, nullptr));
+    }
+
+    void checksumGenericCrc()
+    {
+        // The generic CRC syntax must reproduce the predefined names.
+        QByteArray data = "123456789";
+        QCOMPARE(Checksum::compute("CRC:16,1021,FFFF,0000,No,No", data),
+                 Checksum::compute("CRC-CCITT", data));
+        QCOMPARE(Checksum::compute("CRC:8,31,00,00,Yes,Yes", data),
+                 Checksum::compute("CRC-DOW", data));
+        QCOMPARE(Checksum::compute("CRC:32,04C11DB7,FFFFFFFF,FFFFFFFF,Yes,Yes", data),
+                 Checksum::compute("CRC-32", data));
     }
 
     void portSettingsReachTheLine()
