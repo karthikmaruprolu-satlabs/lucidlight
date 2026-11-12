@@ -90,6 +90,18 @@ ApplicationWindow {
         picker.saveFile(qsTr("Save communication log"), qsTr("Log file"), "*.log", "lucidlight.log");
     }
 
+    // Harness hook: open one of the dialogs by name.
+    function openFor(name) {
+        if (name === "settings")
+            settingsPopup.openFor(0);
+        else if (name === "sequence")
+            sequenceDialog.openNew(true);
+        else if (name === "editor")
+            sequenceDialog.openEdit(0);
+        else if (name === "help")
+            win.helpVisible = true;
+    }
+
     // Routes portal picker results to the right action.
     QtObject {
         id: pickerFlows
@@ -184,15 +196,17 @@ ApplicationWindow {
             }
 
             PortChip {
+                id: chipA
                 label: "A"
                 settings: backend.channelA
-                onClicked: settingsPopup.openFor(0)
+                onClicked: settingsPopup.openFor(0, chipA)
             }
             PortChip {
+                id: chipB
                 label: "B"
                 settings: backend.channelB
                 visible: backend.comm.mode !== 0
-                onClicked: settingsPopup.openFor(1)
+                onClicked: settingsPopup.openFor(1, chipB)
             }
 
             Item { Layout.fillWidth: true }

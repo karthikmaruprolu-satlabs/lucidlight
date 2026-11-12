@@ -371,6 +371,103 @@ private slots:
         QVERIFY(errorText.isEmpty());
     }
 
+    void dlFailFailsTheRun()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        bool ok = true;
+        QString error;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &message) {
+            ok = success;
+            error = message;
+            loop.quit();
+        });
+        runner.run("print(\"before\"); DL.Fail(\"sensor not responding\"); print(\"after\");");
+        loop.exec();
+        QVERIFY(!ok);
+        QCOMPARE(error, QString("sensor not responding"));
+    }
+
+    void dlAssertPassesAndFails()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        bool ok = false;
+        QString error;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &message) {
+            ok = success;
+            error = message;
+            loop.quit();
+        });
+        runner.run("DL.Assert(1 + 1 === 2, \"math is broken\");");
+        loop.exec();
+        QVERIFY(ok);
+        QVERIFY(error.isEmpty());
+
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &message) {
+            ok = success;
+            error = message;
+            loop.quit();
+        });
+        runner.run("DL.Assert(false, \"expected 4 bytes\");");
+        loop.exec();
+        QVERIFY(!ok);
+        QCOMPARE(error, QString("expected 4 bytes"));
+    }
+
+    void dlEnvReadsVariables()
+    {
+        qputenv("LUCID_TEST_RATE", "9600");
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        QString reported;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &) {
+            QVERIFY(ok);
+            loop.quit();
+        });
+        connect(&runner, &ScriptRunner::outputLine, [&](const QString &line, bool) { reported = line; });
+        runner.run("print(DL.Env(\"LUCID_TEST_RATE\") + \"/\" + DL.Env(\"LUCID_TEST_MISSING\", \"fallback\"));");
+        loop.exec();
+        QCOMPARE(reported, QString("9600/fallback"));
+    }
+
+    void dlWaitForSequenceMatchesByName()
+    {
+        // A receive sequence named Ready with the pattern RDY must fire when
+        // the bytes show up in the stream.
+        CommManager manager;
+        SequenceModel sequences;
+        sequences.add({{"name", "Ready"}, {"isSend", false}, {"format", 0}, {"data", "RDY"}});
+        ScriptRunner runner(&manager, &sequences);
+
+        bool finished = false;
+        bool ok = false;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &) {
+            finished = true;
+            ok = success;
+            loop.quit();
+        });
+        runner.run("DL.Assert(DL.WaitForSequence(\"Ready\", 2000), \"no RDY\");");
+        QTest::qWait(150);  // let the worker spin up
+        QVERIFY(runner.engine());
+        // Same route the CommManager uses: queued into the worker thread.
+        QMetaObject::invokeMethod(runner.engine(), "onIncoming", Qt::QueuedConnection,
+                                  Q_ARG(int, 0), Q_ARG(QByteArray, QByteArray("xxRDYyy")));
+        loop.exec();
+        QVERIFY(finished);
+        QVERIFY(ok);
+    }
+
     // ---- project save / load round trip -----------------------------------------
     void projectRoundTrip()
     {

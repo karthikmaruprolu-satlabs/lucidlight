@@ -6,8 +6,8 @@ import QtQuick.Layouts
 Popup {
     id: root
 
-    width: 480
-    height: 460
+    width: 560
+    height: 500
     anchors.centerIn: parent
     modal: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -30,9 +30,9 @@ Popup {
         }
 
         GridLayout {
-            columns: 2
+            columns: 1
             columnSpacing: 26
-            rowSpacing: 8
+            rowSpacing: 10
             Layout.fillWidth: true
 
             Repeater {
@@ -58,13 +58,12 @@ Popup {
                         font.family: win.monoFont
                         font.pixelSize: 12
                         font.weight: Font.DemiBold
-                        Layout.preferredWidth: 150
+                        Layout.preferredWidth: 170
                     }
                     Label {
                         text: modelData[1]
                         color: theme.fg
                         font.pixelSize: 12
-                        wrapMode: Text.Wrap
                         Layout.fillWidth: true
                     }
                 }

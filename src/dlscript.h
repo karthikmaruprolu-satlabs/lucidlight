@@ -30,6 +30,7 @@ public:
             bool isSend = true;
             DataFormat::Format format = DataFormat::Format::Text;
             QByteArray bytes;
+            QVector<bool> wildcard;
         };
         QVector<Entry> entries;
     };
@@ -54,6 +55,7 @@ signals:
     void messageRequested(const QString &text);
     void commentRequested(const QString &text);
     void clearRequested();
+    void saveLogRequested(const QString &path);
     void finished(bool ok, const QString &error);
 
 private:
@@ -73,6 +75,8 @@ private:
     std::atomic_bool m_stop {false};
     std::atomic_bool m_commRunning {false};
     bool m_broken = false;
+    bool m_failed = false;
+    QString m_failMessage;
     qint64 m_startMs = 0;
     QString m_lastError;
 };
@@ -119,6 +123,22 @@ public:
     // DL.ReceiveHex(pattern, timeoutMs) → hex of the matched bytes, or false.
     // ?? inside the pattern matches one unknown byte each.
     Q_INVOKABLE QJSValue ReceiveHex(const QString &pattern, int timeoutMs);
+    // DL.WaitForSequence(name, timeoutMs) → true when the receive sequence
+    // with that name matches the stream; consumed up to the match.
+    Q_INVOKABLE bool WaitForSequence(const QString &name, int timeoutMs);
+    // DL.ReceiveLine(timeoutMs) → the next line without its CR/LF, or false.
+    Q_INVOKABLE QJSValue ReceiveLine(int timeoutMs);
+
+    // ---- test verdicts for automated runs -----------------------------------
+    // DL.Fail(message) stops the script and fails the run (exit code 1).
+    Q_INVOKABLE void Fail(const QString &message);
+    // DL.Assert(condition, message) fails the run when the condition is false.
+    Q_INVOKABLE void Assert(const QJSValue &condition, const QString &message);
+    // DL.Env(name, fallback) reads an environment variable, so test runners
+    // can pass device paths and expectations without editing the script.
+    Q_INVOKABLE QString Env(const QString &name, const QString &fallback = QString());
+    // DL.SaveLog(path) writes the communication window so far to a file.
+    Q_INVOKABLE void SaveLog(const QString &path);
 
     // ---- timing and control ---------------------------------------------------
     Q_INVOKABLE void Wait(int ms);
@@ -161,6 +181,7 @@ public:
     ~ScriptRunner() override;
 
     bool running() const { return m_running; }
+    DLScriptEngine *engine() const { return m_engine; }
     Q_INVOKABLE void run(const QString &code);
     Q_INVOKABLE void stop();
 
@@ -170,6 +191,7 @@ signals:
     void messageRequested(const QString &text);
     void commentRequested(const QString &text);
     void clearRequested();
+    void saveLogRequested(const QString &path);
     void finished(bool ok, const QString &error);
 
 private slots:

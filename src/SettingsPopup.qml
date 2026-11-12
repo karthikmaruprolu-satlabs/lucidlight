@@ -17,8 +17,13 @@ Popup {
         border.color: Qt.alpha(theme.muted, 0.35)
     }
 
-    function openFor(channel) {
+    function openFor(channel, anchorItem) {
         root.channel = channel;
+        if (anchorItem) {
+            const pos = anchorItem.mapToItem(root.parent, 0, anchorItem.height);
+            root.x = Math.min(Math.max(8, pos.x - 8), root.parent.width - root.width - 8);
+            root.y = Math.min(pos.y + 6, root.parent.height - root.height - 8);
+        }
         open();
     }
 

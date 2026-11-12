@@ -72,6 +72,8 @@ bool DLScriptEngine::waitUntil(const std::function<bool()> &predicate, int timeo
 void DLScriptEngine::run(const QString &code) {
     m_stop = false;
     m_broken = false;
+    m_failed = false;
+    m_failMessage.clear();
     m_startMs = QDateTime::currentMSecsSinceEpoch();
     m_lastError.clear();
     {
@@ -93,7 +95,10 @@ void DLScriptEngine::run(const QString &code) {
     const QJSValue result = m_engine->evaluate(code, QStringLiteral("script.js"));
     QString error;
     bool ok = true;
-    if (m_engine->isInterrupted()) {
+    if (m_failed) {
+        ok = false;
+        error = m_failMessage;
+    } else if (m_engine->isInterrupted()) {
         ok = false;
         m_engine->setInterrupted(false);
         error = m_broken ? QStringLiteral("Script stopped by DL.Break") : QStringLiteral("Script stopped");
@@ -349,6 +354,106 @@ void DLObject::Break() {
         m_host->jsEngine()->setInterrupted(true);
 }
 
+void DLObject::Fail(const QString &message) {
+    m_host->m_failed = true;
+    m_host->m_failMessage = message.isEmpty() ? QStringLiteral("Test failed") : message;
+    m_host->m_stop = true;
+    if (m_host->jsEngine())
+        m_host->jsEngine()->setInterrupted(true);
+}
+
+void DLObject::Assert(const QJSValue &condition, const QString &message) {
+    if (!condition.toBool())
+        Fail(message.isEmpty() ? QStringLiteral("Assertion failed") : message);
+}
+
+QString DLObject::Env(const QString &name, const QString &fallback) {
+    const QString value = qEnvironmentVariable(name.toUtf8().constData());
+    return value.isEmpty() ? fallback : value;
+}
+
+void DLObject::SaveLog(const QString &path) {
+    if (!path.isEmpty())
+        emit m_host->saveLogRequested(path);
+}
+
+// Shared wildcard-aware stream search: returns the end index of the first
+// match, or -1. Caller must hold the stream mutex.
+namespace {
+int findPattern(const QByteArray &stream, const QByteArray &bytes, const QVector<bool> &wildcard) {
+    const int size = bytes.size();
+    if (size == 0 || stream.size() < size)
+        return -1;
+    const bool hasMask = wildcard.size() == size;
+    const char *data = stream.constData();
+    for (int start = 0; start + size <= stream.size(); ++start) {
+        bool ok = true;
+        for (int i = 0; i < size; ++i) {
+            if ((!hasMask || !wildcard.at(i)) && data[start + i] != bytes.at(i)) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok)
+            return start + size;
+    }
+    return -1;
+}
+}  // namespace
+
+bool DLObject::WaitForSequence(const QString &name, int timeoutMs) {
+    const DLScriptEngine::Snapshot::Entry *entry = nullptr;
+    for (const auto &candidate : m_host->m_snapshot.entries)
+        if (!candidate.isSend && candidate.name.compare(name, Qt::CaseInsensitive) == 0) {
+            entry = &candidate;
+            break;
+        }
+    if (!entry) {
+        m_host->m_lastError = QStringLiteral("Receive sequence not found: %1").arg(name);
+        return false;
+    }
+    const QByteArray bytes = entry->bytes;
+    const QVector<bool> wildcard = entry->wildcard;
+    int end = -1;
+    const bool arrived = m_host->waitUntil(
+        [&]() {
+            QMutexLocker lock(&m_host->m_streamMutex);
+            end = findPattern(m_host->m_stream, bytes, wildcard);
+            return end >= 0;
+        },
+        timeoutMs);
+    if (!arrived || m_host->m_stop) {
+        m_host->m_lastError = QStringLiteral("Timed out waiting for sequence %1").arg(name);
+        return false;
+    }
+    bool ok = false;
+    takeStream(end, &ok);
+    return ok;
+}
+
+QJSValue DLObject::ReceiveLine(int timeoutMs) {
+    const bool arrived = m_host->waitUntil(
+        [this]() {
+            QMutexLocker lock(&m_host->m_streamMutex);
+            return m_host->m_stream.indexOf('\n') >= 0;
+        },
+        timeoutMs);
+    if (!arrived || m_host->m_stop) {
+        m_host->m_lastError = QStringLiteral("Receive timed out waiting for a line");
+        return QJSValue(false);
+    }
+    QByteArray line;
+    {
+        QMutexLocker lock(&m_host->m_streamMutex);
+        const int at = m_host->m_stream.indexOf('\n');
+        line = m_host->m_stream.left(at);
+        m_host->m_stream.remove(0, at + 1);
+    }
+    if (line.endsWith('\r'))
+        line.chop(1);
+    return m_host->jsEngine()->toScriptValue(QString::fromUtf8(line));
+}
+
 int DLObject::StartTime() {
     return int(QDateTime::currentMSecsSinceEpoch() - m_host->m_startMs);
 }
@@ -427,6 +532,7 @@ DLScriptEngine::Snapshot ScriptRunner::snapshot() const {
         entry.format = seq.format;
         const auto parsed = DataFormat::parse(seq.data, seq.format);
         entry.bytes = parsed.ok() ? parsed.bytes : QByteArray();
+        entry.wildcard = parsed.ok() ? parsed.wildcard : QVector<bool>();
         snap.entries.append(entry);
     }
     return snap;

@@ -28,6 +28,9 @@ flow, poke the device, automate the whole conversation with a script.
   VBScript API (below). Blocking `DL.Receive*` calls park the script, never
   the UI; a runaway script is always stoppable. Editor with highlighting,
   line numbers, and an output pane.
+- **Agent-friendly** — the same engine runs headless with NDJSON output,
+  exit codes, and test verdicts (`DL.Assert`/`DL.Fail`), and a bundled agent
+  skill: `lucidlight skill install`.
 - **Projects** — one `.llproj` JSON file keeps mode, both port configs, all
   sequences, the script, and display options. The session autosaves to
   `~/.local/state/lucidlight/`.
@@ -114,6 +117,7 @@ DL.StopCommunication();
 | Call | Meaning |
 |---|---|
 | `DL.Receive(count, timeoutMs)` | next `count` bytes as a string, or `false` on timeout |
+| `DL.ReceiveLine(timeoutMs)` | next line without its CR/LF, or `false` |
 | `DL.ReceiveStr(text, timeoutMs)` | `true` when `text` appears; the stream is consumed up to it |
 | `DL.ReceiveHex("AA ?? 55", timeoutMs)` | hex of the matched bytes (wildcards allowed), or `false` |
 
@@ -125,6 +129,11 @@ DL.StopCommunication();
 | `DL.Comment(text)` | write a note into the communication window |
 | `DL.ShowMessage(text)` | toast for the user |
 | `DL.Break()` | stop the script |
+| `DL.Fail(message)` | stop and fail the run (headless exit code 1) |
+| `DL.Assert(condition, message)` | `Fail` when the condition is false |
+| `DL.WaitForSequence(name, timeoutMs)` | wait for a named receive sequence to match |
+| `DL.Env(name, fallback)` | read an environment variable |
+| `DL.SaveLog(path)` | dump the communication window so far to a file |
 | `DL.HexToStr(h)` / `DL.StrToHex(s)` | byte↔string (1:1, Latin-1) |
 | `DL.HexToDec(h)` / `DL.DecToHex(d, digits)` | number conversions |
 | `DL.Asc(ch)` / `DL.Chr(n)` | character code helpers |
@@ -137,13 +146,29 @@ lucidlight run device.llproj --port-a /dev/ttyUSB0
 
 # Full scripted test; exits 1 when the script fails:
 lucidlight run device.llproj --script smoke.js --duration 60 --baud 9600
+
+# Machine-readable run for CI and agents (NDJSON, ends with a result line):
+lucidlight run device.llproj --script smoke.js --json --out capture.log
+
+# Teach your coding agent the whole workflow:
+lucidlight skill install
 ```
+
+Stream semantics: receives consume what they match; anything before or after
+the match stays in the buffer. Finish a matched line with
+`DL.ReceiveLine(timeout)` before reading the next one.
+
+## Agent skill
+
+`lucidlight skill` prints a compact guide (project schema, DL API, socat
+loopback recipe) for coding agents; `lucidlight skill install` installs it
+into `~/.pi/agent/skills/lucidlight/`.
 
 ## Development
 
 ```sh
 ./bin/build          # qmake6 + make into build/lucidlight
-./bin/test           # 33 unit and end-to-end tests (offscreen)
+./bin/test           # 37 unit and end-to-end tests (offscreen)
 tests/grab_harness   # LUCID_SIM=1 LUCID_TAB=script ./grab_harness — screenshots offscreen
 ```
 

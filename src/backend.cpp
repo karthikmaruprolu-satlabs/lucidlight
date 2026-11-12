@@ -50,6 +50,7 @@ Backend::Backend(QObject *parent)
         m_log->appendComment(text);
     });
     connect(m_runner, &ScriptRunner::clearRequested, m_log, &CommLog::clear);
+    connect(m_runner, &ScriptRunner::saveLogRequested, this, &Backend::saveLogTo);
     connect(m_sequences, &SequenceModel::sendRequested, this, &Backend::sendSequence);
 }
 
@@ -325,20 +326,21 @@ void Backend::saveSession() {
     setDirty(false);
 }
 
-void Backend::loadSession() {
+bool Backend::loadSession() {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericStateLocation)
                         + "/lucidlight";
     QFile file(dir + "/session.json");
     if (!file.open(QIODevice::ReadOnly))
-        return;
+        return false;
     const QJsonObject state = QJsonDocument::fromJson(file.readAll()).object();
     QString script;
     const QString error = Project::load(state, m_comm, m_a, m_b, m_sequences, &script, m_log);
     if (!error.isEmpty())
-        return;
+        return false;
     setScriptSource(script);
     setProjectPath(QString());
     setDirty(false);
+    return true;
 }
 
 QString Backend::parseError(const QString &text, int format) const {

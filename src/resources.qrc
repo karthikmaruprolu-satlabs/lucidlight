@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/">
         <file alias="Main.qml">Main.qml</file>
+        <file alias="skill.md">skill.md</file>
         <file alias="CommRow.qml">CommRow.qml</file>
         <file alias="SegmentRow.qml">SegmentRow.qml</file>
         <file alias="PortChip.qml">PortChip.qml</file>

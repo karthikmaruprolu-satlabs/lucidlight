@@ -62,6 +62,22 @@ int main(int argc, char *argv[]) {
                                     "}\n");
             backend.log()->append(CommLog::Event, -1, "Script finished");
         }
+        // LUCID_OPEN=settings / sequence / help / editor opens a dialog.
+        const QString openWhat = qEnvironmentVariable("LUCID_OPEN");
+        if (!openWhat.isEmpty()) {
+            QVariant returned;
+            const bool called = QMetaObject::invokeMethod(window, "openFor", Qt::DirectConnection,
+                                      Q_RETURN_ARG(QVariant, returned), Q_ARG(QVariant, openWhat));
+            qInfo() << "openFor called:" << called;
+            // Let the popup's enter animation finish before grabbing.
+            QTimer::singleShot(450, &app, [&] {
+                const QString out = qEnvironmentVariable("LUCID_GRAB", "/tmp/lucid-grab.png");
+                window->grabWindow().save(out);
+                qInfo() << "grabbed" << out;
+                app.quit();
+            });
+            return;
+        }
         const QString out = qEnvironmentVariable("LUCID_GRAB", "/tmp/lucid-grab.png");
         window->grabWindow().save(out);
         qInfo() << "grabbed" << out;

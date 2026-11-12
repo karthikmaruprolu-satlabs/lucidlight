@@ -66,7 +66,9 @@ public:
     Q_INVOKABLE void openProjectFrom(const QString &path);
     Q_INVOKABLE void saveProjectTo(const QString &path);
     Q_INVOKABLE void saveSession();                 // autosave to the state dir
-    Q_INVOKABLE void loadSession();                 // restore at startup
+    // Returns true when a saved session was restored; false on first run,
+    // so the caller can clear the fake dirty state from the welcome data.
+    Q_INVOKABLE bool loadSession();
     Q_INVOKABLE QString parseError(const QString &text, int format) const;
     Q_INVOKABLE QString previewBytes(const QString &text, int format) const;
     Q_INVOKABLE void copyToClipboard(const QString &text);
