@@ -131,9 +131,29 @@ void CommLog::setDisplayFormat(DataFormat::Format format) {
     if (format == m_format)
         return;
     m_format = format;
-    for (Row &row : m_rows)
-        if (row.direction != Comment && row.direction != Event)
+    rerender();
+}
+
+void CommLog::setShowControlNames(bool on) {
+    if (on == m_showControlNames)
+        return;
+    m_showControlNames = on;
+    rerender();
+}
+
+void CommLog::rerender() {
+    if (m_rows.isEmpty())
+        return;
+    beginResetModel();
+    for (Row &row : m_rows) {
+        if (row.direction == Comment || row.direction == Event)
+            continue;
+        if (m_format == DataFormat::Format::Text && m_showControlNames)
+            row.text = DataFormat::displayWithControlNames(row.data);
+        else
             row.text = DataFormat::display(row.data, m_format);
+    }
+    endResetModel();
     emit displayChanged();
 }
 
@@ -169,8 +189,12 @@ void CommLog::append(Direction direction, int channel, const QByteArray &data, b
     row.data = data;
     row.stampMs = QDateTime::currentMSecsSinceEpoch();
     row.deltaMs = row.stampMs - m_startMs;
-    row.text = direction == Comment || direction == Event ? QString::fromUtf8(data)
-                                                          : DataFormat::display(data, m_format);
+    if (direction == Comment || direction == Event)
+        row.text = QString::fromUtf8(data);
+    else if (m_format == DataFormat::Format::Text && m_showControlNames)
+        row.text = DataFormat::displayWithControlNames(data);
+    else
+        row.text = DataFormat::display(data, m_format);
     row.hex = DataFormat::toHex(data);
     row.highlighted = highlighted;
     if (m_frozen) {

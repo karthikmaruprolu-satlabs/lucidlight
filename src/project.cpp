@@ -123,6 +123,7 @@ QString Project::displayFormatName(DataFormat::Format format) {
     switch (format) {
     case DataFormat::Format::Hex: return "hex";
     case DataFormat::Format::Dec: return "dec";
+    case DataFormat::Format::Bin: return "bin";
     default: return "text";
     }
 }
@@ -132,5 +133,7 @@ DataFormat::Format Project::displayFormatFromName(const QString &name) {
         return DataFormat::Format::Hex;
     if (name == QLatin1String("dec"))
         return DataFormat::Format::Dec;
+    if (name == QLatin1String("bin") || name == QLatin1String("binary"))
+        return DataFormat::Format::Bin;
     return DataFormat::Format::Text;
 }

@@ -207,6 +207,33 @@ ParsedBytes DataFormat::parse(const QString &input, Format format) {
         return result;
     }
 
+    // Binary mode: 8-bit groups, same tokens as decimal.
+    if (format == Format::Bin) {
+        static const QRegularExpression tokenRe(
+            QStringLiteral("\\[[^\\]]*\\]|[^\\s,]+"));
+        auto it = tokenRe.globalMatch(input);
+        while (it.hasNext()) {
+            const QString token = it.next().captured(0);
+            if (token.startsWith(QLatin1Char('['))) {
+                int i = input.indexOf(token);
+                if (!parseBracket(input, i, result))
+                    return result;
+                continue;
+            }
+            bool ok = false;
+            const int value = token.toInt(&ok, 2);
+            if (!ok || value < 0 || value > 255) {
+                result.error = QObject::tr("'%1' is not an 8-bit binary group").arg(token);
+                return result;
+            }
+            ParsedBytes::Element e;
+            e.kind = ParsedBytes::Element::Data;
+            e.value = uchar(value);
+            result.elements.append(e);
+        }
+        return result;
+    }
+
     // Dec mode: decimal byte values, same wildcard and function tokens.
     {
         static const QRegularExpression tokenRe(
@@ -290,6 +317,16 @@ QString DataFormat::display(const QByteArray &data, Format format) {
     }
     if (format == Format::Hex)
         return toHex(data);
+    if (format == Format::Bin) {
+        // Docklight's Binary view: eight bits per byte, space separated.
+        QString bin;
+        for (int i = 0; i < data.size(); ++i) {
+            if (i)
+                bin.append(QLatin1Char(' '));
+            bin += QString("%1").arg(uchar(data.at(i)), 8, 2, QChar('0'));
+        }
+        return bin;
+    }
     QString dec;
     for (int i = 0; i < data.size(); ++i) {
         if (i)
@@ -297,6 +334,65 @@ QString DataFormat::display(const QByteArray &data, Format format) {
         dec.append(QString::number(uchar(data.at(i))));
     }
     return dec;
+}
+
+// Docklight's "control characters" view option: bytes below 0x20 (plus DEL)
+// show as their mnemonic inside angle brackets.
+QString DataFormat::controlName(uchar byte) {
+    switch (byte) {
+    case 0x00: return "NUL";
+    case 0x01: return "SOH";
+    case 0x02: return "STX";
+    case 0x03: return "ETX";
+    case 0x04: return "EOT";
+    case 0x05: return "ENQ";
+    case 0x06: return "ACK";
+    case 0x07: return "BEL";
+    case 0x08: return "BS";
+    case 0x09: return "TAB";
+    case 0x0A: return "LF";
+    case 0x0B: return "VT";
+    case 0x0C: return "FF";
+    case 0x0D: return "CR";
+    case 0x0E: return "SO";
+    case 0x0F: return "SI";
+    case 0x10: return "DLE";
+    case 0x11: return "DC1";
+    case 0x12: return "DC2";
+    case 0x13: return "DC3";
+    case 0x14: return "DC4";
+    case 0x15: return "NAK";
+    case 0x16: return "SYN";
+    case 0x17: return "ETB";
+    case 0x18: return "CAN";
+    case 0x19: return "EM";
+    case 0x1A: return "SUB";
+    case 0x1B: return "ESC";
+    case 0x1C: return "FS";
+    case 0x1D: return "GS";
+    case 0x1E: return "RS";
+    case 0x1F: return "US";
+    case 0x7F: return "DEL";
+    default: return QString();
+    }
+}
+
+QString DataFormat::displayWithControlNames(const QByteArray &data) {
+    QString text;
+    for (int i = 0; i < data.size(); ++i) {
+        const uchar byte = uchar(data.at(i));
+        if (byte == '\r' && i + 1 < data.size() && data.at(i + 1) == '\n') {
+            text += "<CR><LF>";
+            ++i;
+            continue;
+        }
+        const QString name = controlName(byte);
+        if (!name.isEmpty())
+            text += "<" + name + ">";
+        else
+            text.append(QChar(byte));
+    }
+    return text;
 }
 
 QString DataFormat::toHex(const QByteArray &data) {

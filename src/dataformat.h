@@ -57,7 +57,13 @@ struct ParsedBytes {
 
 class DataFormat {
 public:
-    enum class Format { Text, Hex, Dec };
+    // Mnemonic for a control byte (CR, LF, ESC...), empty for printable.
+    static QString controlName(uchar byte);
+    // ASCII view with <mnemonic> control-character names.
+    static QString displayWithControlNames(const QByteArray &data);
+
+public:
+    enum class Format { Text, Hex, Dec, Bin };
 
     static ParsedBytes parse(const QString &input, Format format);
     // Display form of received bytes in the chosen view: ASCII shows

@@ -19,6 +19,8 @@ class CommLog : public QAbstractListModel {
     Q_PROPERTY(bool showDelta READ showDelta WRITE setShowDelta NOTIFY displayChanged)
     // Docklight contents filter: 0 all, 1 channel 1, 2 channel 2, 3 comments only.
     Q_PROPERTY(int channelFilter READ channelFilter WRITE setChannelFilter NOTIFY filterChanged)
+    // Docklight's "control characters" view option for the ASCII view.
+    Q_PROPERTY(bool showControlNames READ showControlNames WRITE setShowControlNames NOTIFY displayChanged)
     Q_PROPERTY(DataFormat::Format displayFormat READ displayFormat WRITE setDisplayFormat NOTIFY displayChanged)
 
 public:
@@ -53,6 +55,8 @@ public:
     void setFrozen(bool frozen);
     void setShowTimestamps(bool on);
     void setShowDelta(bool on);
+    bool showControlNames() const { return m_showControlNames; }
+    void setShowControlNames(bool on);
     int channelFilter() const { return m_channelFilter; }
     void setChannelFilter(int filter);
     void setDisplayFormat(DataFormat::Format format);
@@ -109,6 +113,9 @@ private:
     qint64 m_startMs = 0;
     bool m_frozen = false;
     int m_channelFilter = 0;
+    bool m_showControlNames = false;
+    // Recomputes every row's text from the raw data (after a view switch).
+    void rerender();
     bool m_showTimestamps = true;
     bool m_showDelta = false;
     DataFormat::Format m_format = DataFormat::Format::Text;

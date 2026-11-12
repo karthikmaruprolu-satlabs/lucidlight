@@ -29,10 +29,10 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [ ] Parity error replacement character (ParityErrorChar, default 63)
 
 ## Communication window
-- [~] Four representations: ASCII/HEX/DEC/Binary — HEX + ASCII exist; DEC
-      exists as display format; Binary tab missing
-- [ ] Tabbed representations with Ctrl+Tab cycling like Docklight
-- [ ] Control character names (<CR><LF><NUL>...) in ASCII view
+- [x] Four representations: ASCII/HEX/DEC/Binary (Binary also parses for
+      sending, 8-bit groups)
+- [x] Tabbed representations with Ctrl+Tab / Ctrl+Shift+Tab cycling
+- [x] Control character names (<CR><LF><NUL>...) in ASCII view, toolbar toggle
 - [x] Contents filter: all / channel 1 / channel 2 / comments only
       (+ DL.SetContentsFilter via bridge)
 - [~] Channel 1 / Channel 2 color+style distinction (RXA/TXA/RXB pills)

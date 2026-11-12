@@ -252,6 +252,17 @@ ApplicationWindow {
                 ToolTip.delay: 600
             }
             ToolButton {
+                id: ctrlNamesButton
+                checkable: true
+                checked: backend.log.showControlNames
+                text: "⏎"
+                font.pixelSize: 14
+                onClicked: backend.log.showControlNames = checked
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Show control characters as <CR>, <LF>, <ESC> … in the ASCII view")
+                ToolTip.delay: 600
+            }
+            ToolButton {
                 id: deltaButton
                 checkable: true
                 checked: backend.log.showDelta
@@ -358,6 +369,17 @@ ApplicationWindow {
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: 0
+
+                        // Docklight's representation tabs: ASCII/HEX/DEC/Binary,
+                        // cycled with Ctrl+Tab like the original.
+                        SegmentRow {
+                            id: reprRow
+                            Layout.margins: 6
+                            Layout.alignment: Qt.AlignHCenter
+                            model: [qsTr("ASCII"), qsTr("HEX"), qsTr("DEC"), qsTr("Binary")]
+                            currentIndex: backend.log.displayFormat
+                            onActivated: (index) => backend.log.displayFormat = index
+                        }
 
                         ListView {
                             id: commView

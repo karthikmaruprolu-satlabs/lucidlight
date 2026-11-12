@@ -81,6 +81,22 @@ private slots:
         QVERIFY(!DataFormat::parse("256", DataFormat::Format::Dec).ok());
     }
 
+    void binaryViewAndControlNames()
+    {
+        // Binary view: eight bits per byte, both directions round-trip.
+        QCOMPARE(DataFormat::display(QByteArray("AB"), DataFormat::Format::Bin),
+                 QString("01000001 01000010"));
+        const auto parsed = DataFormat::parse("01000001 01000010", DataFormat::Format::Bin);
+        QVERIFY(parsed.ok());
+        QCOMPARE(parsed.bytes(), QByteArray("AB"));
+
+        // Control-character mnemonics, with the CRLF pair folded.
+        QCOMPARE(DataFormat::controlName(0x0D), QString("CR"));
+        QCOMPARE(DataFormat::controlName(0x41), QString());
+        QCOMPARE(DataFormat::displayWithControlNames(QByteArray("A\r\nB\x1B")),
+                 QString("A<CR><LF>B<ESC>"));
+    }
+
     void displayFormats()
     {
         const QByteArray data("Hi\r");

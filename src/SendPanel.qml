@@ -15,7 +15,7 @@ ColumnLayout {
             id: formatBox
             Layout.preferredWidth: 100
             font.pixelSize: 12
-            model: [qsTr("Text"), qsTr("Hex"), qsTr("Dec")]
+            model: [qsTr("Text"), qsTr("Hex"), qsTr("Dec"), qsTr("Binary")]
         }
 
         TextField {

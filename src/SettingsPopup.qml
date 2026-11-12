@@ -54,8 +54,6 @@ Popup {
                 font.pixelSize: 12
                 font.family: win.monoFont
                 model: backend.ports.ports()
-                // Network channels are typed directly, Docklight-style.
-                placeholderText: qsTr("TCP:host:port · SERVER:port · UDP:host:port")
                 editText: root.channel === 0 ? backend.channelA.device : backend.channelB.device
                 onActivated: applyDevice()
                 onAccepted: applyDevice()
@@ -73,6 +71,13 @@ Popup {
                 }
             }
 
+            Label {
+                Layout.columnSpan: 2
+                text: qsTr("Serial device, or a network channel: TCP:host:port · SERVER:port · UDP:host:port")
+                color: Qt.alpha(theme.muted, 0.7)
+                font.pixelSize: 11
+                visible: root.channel === 0
+            }
             Label { text: qsTr("Baud rate"); color: theme.muted; font.pixelSize: 12 }
             ComboBox {
                 id: baudBox
