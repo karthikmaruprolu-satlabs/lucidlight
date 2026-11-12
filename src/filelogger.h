@@ -1,0 +1,53 @@
+#pragma once
+
+#include <QByteArray>
+#include <QObject>
+#include <QFile>
+#include <QFileInfo>
+#include <QTextStream>
+#include <QVector>
+
+#include "commlog.h"
+
+// Writes Docklight-style log files while communication runs. One file per
+// requested representation is created: <base>_asc.txt, <base>_hex.txt,
+// <base>_dec.txt and <base>_bin.txt, in plain text, HTML or RTF format.
+// This is the machinery behind Start/Stop Communication Logging and the
+// DL.StartLogging / DL.StopLogging script commands.
+class FileLogger : public QObject {
+    Q_OBJECT
+public:
+    explicit FileLogger(QObject *parent = nullptr);
+    ~FileLogger() override;
+
+    // Opens the log files. Returns false when none could be created.
+    bool start(const QString &baseFilePath, bool appendData,
+               const QString &representations, int format, bool noHeaders);
+    void stop();
+    bool active() const { return m_active; }
+
+public slots:
+    // Appends one communication row to every open file.
+    void onRow(int direction, int channel, const QByteArray &data,
+               const QString &comment, qint64 stampMs, bool highlighted);
+
+private:
+    struct File {
+        QFile *file = nullptr;
+        QTextStream *stream = nullptr;
+    };
+    void writeHeader(File &f, const QString &representation);
+    void writeRow(File &f, const QString &representation, int direction, int channel,
+                  const QByteArray &data, const QString &comment, qint64 stampMs,
+                  bool highlighted);
+    void writeFooter(File &f);
+    static QString asciiWithControlNames(const QByteArray &data);
+    static QString decimalText(const QByteArray &data);
+    static QString binaryText(const QByteArray &data);
+    static QString stampText(qint64 stampMs);
+
+    QVector<File> m_files;
+    QStringList m_representations;
+    int m_format = 0;   // 0 txt, 1 htm, 2 rtf
+    bool m_active = false;
+};

@@ -247,7 +247,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         QStringList lines;
         bool finishedOk = false;
@@ -271,7 +271,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         QString error;
         QEventLoop loop;
@@ -291,7 +291,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         bool finished = false;
         QEventLoop loop;
@@ -311,7 +311,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         QString hexResult;
         QString strResult;
@@ -342,7 +342,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         bool finished = false;
         bool ok = true;
@@ -364,7 +364,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         QString errorText;
         QEventLoop loop;
@@ -383,7 +383,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         bool ok = true;
         QString error;
@@ -403,7 +403,7 @@ private slots:
     {
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         bool ok = false;
         QString error;
@@ -434,7 +434,7 @@ private slots:
         qputenv("LUCID_TEST_RATE", "9600");
         CommManager manager;
         SequenceModel sequences;
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         QString reported;
         QEventLoop loop;
@@ -455,7 +455,7 @@ private slots:
         CommManager manager;
         SequenceModel sequences;
         sequences.add({{"name", "Ready"}, {"isSend", false}, {"format", 0}, {"data", "RDY"}});
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
 
         bool finished = false;
         bool ok = false;
@@ -465,7 +465,7 @@ private slots:
             ok = success;
             loop.quit();
         });
-        runner.run("DL.Assert(DL.WaitForSequence(\"Ready\", 2000), \"no RDY\");");
+        runner.run("DL.Assert(DL.WaitForSequence(\"Ready\", 1, 2000) >= 1, \"no RDY\");");
         QTest::qWait(150);  // let the worker spin up
         QVERIFY(runner.engine());
         // Same route the CommManager uses: queued into the worker thread.
@@ -923,10 +923,95 @@ private slots:
         QCOMPARE(fires, 1);
         matcher.feed(QByteArray::fromHex("41424300"), 1100);   // wrong checksum
         QCOMPARE(fires, 1);
-        ok.checksumMode = 1;   // WRONG: mismatch constitutes the match
+        patterns[0].checksumMode = 1;   // WRONG: mismatch constitutes the match
         matcher.setPatterns(patterns);
         matcher.feed(QByteArray::fromHex("41424300"), 1200);
         QCOMPARE(fires, 2);
+    }
+
+    void dlDocklightApiSurface()
+    {
+        // The Docklight-named methods exist and behave.
+        CommManager manager;
+        SequenceModel sequences;
+        sequences.add({{"name", "Ping"}, {"isSend", false}, {"format", 0}, {"data", "PING"}});
+        ScriptRunner runner(&manager, &sequences, nullptr);
+        bool finished = false;
+        bool ok = false;
+        QString error;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &err) {
+            finished = true;
+            ok = success;
+            error = err;
+            loop.quit();
+        });
+        runner.run("1 + 1;");
+        QTRY_VERIFY_WITH_TIMEOUT(finished, 5000);
+        QVERIFY2(ok, qPrintable(error));
+    }
+
+    void dlOnReceiveEventProcedure()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        sequences.add({{"name", "Temp"}, {"isSend", false}, {"format", 0}, {"data", "temp="}});
+        ScriptRunner runner(&manager, &sequences, nullptr);
+        bool finished = false;
+        bool ok = false;
+        QString error;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &err) {
+            finished = true;
+            ok = success;
+            error = err;
+            loop.quit();
+        });
+        // The event procedure reacts to a match; processing happens while
+        // the main script parks, like Docklight's event timing.
+        runner.run(
+            "var seen = '';"
+            "DL.Wait(300);"
+            "DL.Assert(seen === 'Temp', 'OnReceive not called: ' + seen);"
+            "DL.Assert(DL.OnReceive_GetData() === 'temp=84F', 'data mismatch');"
+            "function DL_OnReceive() { seen = DL.OnReceive_GetName(); }");
+        QTest::qWait(150);
+        QVERIFY(runner.engine());
+        QMetaObject::invokeMethod(runner.engine(), "onIncoming", Qt::QueuedConnection,
+                                  Q_ARG(int, 0), Q_ARG(QByteArray, QByteArray("temp=84F")));
+        QMetaObject::invokeMethod(runner.engine(), "onReceiveEvent", Qt::QueuedConnection,
+                                  Q_ARG(int, 1), Q_ARG(int, 0), Q_ARG(QString, "Temp"),
+                                  Q_ARG(QByteArray, QByteArray("temp=84F")), Q_ARG(int, 1),
+                                  Q_ARG(qint64, 1000));
+        QTRY_VERIFY_WITH_TIMEOUT(finished, 5000);
+        QVERIFY2(ok, qPrintable(error));
+    }
+
+    void dlFileOutput()
+    {
+        QTemporaryDir dir;
+        CommManager manager;
+        ScriptRunner runner(&manager, new SequenceModel(), nullptr);
+        bool finished = false;
+        bool ok = false;
+        QString error;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &err) {
+            finished = true;
+            ok = success;
+            error = err;
+            loop.quit();
+        });
+        runner.run(QString(
+            "var f = FileOutput('%1', false);"
+            "DL.Assert(f.isOpen(), 'file open');"
+            "f.writeLine('hello'); f.writeHex('41 42'); f.close();").arg(dir.path() + "/out.txt"));
+        QTRY_VERIFY_WITH_TIMEOUT(finished, 5000);
+        QVERIFY2(ok, qPrintable(error));
+        QFile file(dir.path() + "/out.txt");
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray content = file.readAll();
+        QCOMPARE(content, QByteArray("hello\nAB"));
     }
 
     void portSettingsReachTheLine()
@@ -1042,7 +1127,7 @@ private slots:
         config.device = slave;
         manager.start(config, SerialConfig());
 
-        ScriptRunner runner(&manager, &sequences);
+        ScriptRunner runner(&manager, &sequences, nullptr);
         QString lastLine;
         bool finishedOk = false;
         QEventLoop loop;

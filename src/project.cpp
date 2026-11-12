@@ -38,6 +38,11 @@ QJsonObject Project::save(CommManager *comm, ChannelSettings *a, ChannelSettings
         object["repeatIntervalMs"] = seq.repeatIntervalMs;
         object["replyToId"] = seq.replyToId;
         object["enabled"] = seq.enabled;
+        object["comment"] = seq.comment;
+        object["trigger"] = seq.trigger;
+        object["stopRun"] = seq.stopRun;
+        object["checksumSpec"] = seq.checksumSpec;
+        object["checksumMode"] = seq.checksumMode;
         sequenceArray.append(object);
     }
     state["sequences"] = sequenceArray;
@@ -84,6 +89,11 @@ QString Project::load(const QJsonObject &state, CommManager *comm, ChannelSettin
         seq.repeatIntervalMs = object.value("repeatIntervalMs").toInt(0);
         seq.replyToId = object.value("replyToId").toInt(-1);
         seq.enabled = object.value("enabled").toBool(true);
+        seq.comment = object.value("comment").toString();
+        seq.trigger = object.value("trigger").toBool(false);
+        seq.stopRun = object.value("stopRun").toBool(false);
+        seq.checksumSpec = object.value("checksumSpec").toString();
+        seq.checksumMode = object.value("checksumMode").toInt(0);
         loaded.append(seq);
     }
     sequences->replaceAll(loaded);

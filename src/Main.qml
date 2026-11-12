@@ -211,6 +211,19 @@ ApplicationWindow {
 
             Item { Layout.fillWidth: true }
 
+            // Docklight contents filter: All / Ch 1 / Ch 2 / Comments.
+            SegmentRow {
+                id: filterRow
+                model: [qsTr("All"), qsTr("Ch 1"), qsTr("Ch 2"), qsTr("Comments")]
+                currentIndex: backend.log.channelFilter
+                onActivated: (index) => backend.log.channelFilter = index
+                ToolTip.visible: filterRow.hovered
+                ToolTip.text: qsTr("Contents filter — show everything, one channel, or only comments")
+                ToolTip.delay: 600
+            }
+
+            Item { Layout.fillWidth: true }
+
             Button {
                 id: searchButton
                 Layout.preferredHeight: 32
@@ -601,8 +614,102 @@ ApplicationWindow {
         }
     }
 
+    // Blocking script dialogs: DL.MsgBox2 and DL.InputBox2 arrive here while
+    // the script worker parks until the answer flows back.
+    Popup {
+        id: scriptDialog
+        anchors.centerIn: parent
+        width: 420
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        background: Rectangle {
+            color: theme.surface
+            radius: Math.min(10, theme.radius + 4)
+            border.color: Qt.alpha(theme.muted, 0.3)
+        }
+        property int dlgButtons: 1
+        property bool wantsInput: false
+        property string titleText: "Script"
+        property string promptText: ""
+        property string defaultText: ""
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+            Label {
+                text: scriptDialog.titleText
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+            }
+            Label {
+                Layout.fillWidth: true
+                text: scriptDialog.promptText
+                wrapMode: Text.Wrap
+                color: theme.fg
+                font.pixelSize: 13
+            }
+            TextField {
+                id: scriptDialogInput
+                Layout.fillWidth: true
+                visible: scriptDialog.wantsInput
+                text: scriptDialog.defaultText
+                onAccepted: scriptDialog.answer(1)
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 8
+                Button {
+                    visible: (scriptDialog.dlgButtons & 2) !== 0
+                    text: qsTr("Cancel")
+                    flat: true
+                    onClicked: scriptDialog.answer(2)
+                }
+                Button {
+                    visible: (scriptDialog.dlgButtons & 4) !== 0
+                    text: qsTr("Abort")
+                    flat: true
+                    onClicked: scriptDialog.answer(3)
+                }
+                Button {
+                    visible: (scriptDialog.dlgButtons & 8) !== 0
+                    text: qsTr("Retry")
+                    flat: true
+                    onClicked: scriptDialog.answer(4)
+                }
+                Button {
+                    visible: (scriptDialog.dlgButtons & 16) !== 0
+                    text: qsTr("Ignore")
+                    flat: true
+                    onClicked: scriptDialog.answer(5)
+                }
+                Button {
+                    visible: (scriptDialog.dlgButtons & 32) !== 0
+                    text: qsTr("Yes")
+                    flat: true
+                    onClicked: scriptDialog.answer(6)
+                }
+                Button {
+                    visible: (scriptDialog.dlgButtons & 64) !== 0
+                    text: qsTr("No")
+                    flat: true
+                    onClicked: scriptDialog.answer(7)
+                }
+                Button {
+                    visible: (scriptDialog.dlgButtons & 1) !== 0
+                    text: qsTr("OK")
+                    highlighted: true
+                    onClicked: scriptDialog.answer(1)
+                }
+            }
+        }
+        // Docklight MsgBox2/InputBox2 button bit assignments.
+        function answer(value) {
+            backend.answerScriptDialog(value, wantsInput ? scriptDialogInput.text : "");
+            close();
+        }
+    }
+
     Toast {
-        id: toast
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 42
         anchors.horizontalCenter: parent.horizontalCenter
@@ -611,6 +718,15 @@ ApplicationWindow {
     Connections {
         target: backend
         function onToast(text) { toast.show(text) }
+        function onScriptDialogRequested(prompt, buttons, title, input, defaultText) {
+            scriptDialog.promptText = prompt;
+            scriptDialog.dlgButtons = buttons;
+            scriptDialog.titleText = title;
+            scriptDialog.wantsInput = input;
+            scriptDialog.defaultText = defaultText;
+            scriptDialogInput.text = defaultText;
+            scriptDialog.open();
+        }
     }
 
     Component.onCompleted: {

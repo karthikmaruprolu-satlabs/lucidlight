@@ -99,6 +99,7 @@ void SerialLink::applyConfig(const SerialConfig &config) {
 
     // Mark and space parity need the CMSPAR extension, which Linux provides.
     tio.c_cflag &= ~(PARENB | PARODD | CMSPAR);
+    m_parity = config.parity;
     switch (config.parity) {
     case 1: tio.c_cflag |= PARENB; break;                       // even
     case 2: tio.c_cflag |= PARENB | PARODD; break;              // odd
@@ -213,6 +214,27 @@ bool SerialLink::setRTS(bool on) {
 }
 
 // A set TIOCM_CTS bit means the line is asserted on Linux.
+bool SerialLink::setParity(int parity) {
+    if (m_fd < 0)
+        return false;
+    termios tio {};
+    if (::tcgetattr(m_fd, &tio) != 0)
+        return false;
+    tio.c_cflag &= ~(PARENB | PARODD | CMSPAR);
+    switch (parity) {
+    case 1: tio.c_cflag |= PARENB; break;                       // even
+    case 2: tio.c_cflag |= PARENB | PARODD; break;              // odd
+    case 3: tio.c_cflag |= PARENB | PARODD | CMSPAR; break;     // mark
+    case 4: tio.c_cflag |= PARENB | CMSPAR; break;              // space
+    default: break;                                             // none
+    }
+    if (::tcsetattr(m_fd, TCSANOW, &tio) == 0) {
+        m_parity = parity;
+        return true;
+    }
+    return false;
+}
+
 bool SerialLink::cts() const {
     int flags = 0;
     return m_fd >= 0 && ::ioctl(m_fd, TIOCMGET, &flags) == 0 && (flags & TIOCM_CTS);

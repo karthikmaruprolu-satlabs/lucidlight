@@ -11,6 +11,7 @@ HEADERS += \
     src/portenumerator.h \
     src/dataformat.h \
     src/checksum.h \
+    src/filelogger.h \
     src/commlog.h \
     src/commmanager.h \
     src/channelsettings.h \
@@ -30,6 +31,7 @@ SOURCES += \
     src/portenumerator.cpp \
     src/dataformat.cpp \
     src/checksum.cpp \
+    src/filelogger.cpp \
     src/commlog.cpp \
     src/commmanager.cpp \
     src/channelsettings.cpp \

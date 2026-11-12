@@ -45,6 +45,10 @@ public:
     void sendBreak(int durationMs);
     bool setDTR(bool on);
     bool setRTS(bool on);
+    // Switches the parity setting of an open port on the fly, used by the
+    // '!' function character for 9-bit protocols. Returns false on failure.
+    bool setParity(int parity);
+    int parity() const { return m_parity; }
     bool cts() const;
     bool dsr() const;
     bool dcd() const;
@@ -65,6 +69,7 @@ private:
     int m_fd = -1;
     QString m_device;
     QString m_lastError;
+    int m_parity = 0;
     termios m_savedTermios {};
     bool m_savedValid = false;
     QSocketNotifier *m_notifier = nullptr;

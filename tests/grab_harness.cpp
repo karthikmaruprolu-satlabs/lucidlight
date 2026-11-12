@@ -6,6 +6,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QTimer>
+#include <cstdlib>
 
 #include "backend.h"
 #include "jshighlighter.h"
@@ -75,6 +76,7 @@ int main(int argc, char *argv[]) {
                 window->grabWindow().save(out);
                 qInfo() << "grabbed" << out;
                 app.quit();
+                QTimer::singleShot(300, [] { std::_Exit(0); });
             });
             return;
         }
@@ -82,6 +84,7 @@ int main(int argc, char *argv[]) {
         window->grabWindow().save(out);
         qInfo() << "grabbed" << out;
         app.quit();
+        QTimer::singleShot(300, [] { std::_Exit(0); });
     });
     return app.exec();
 }

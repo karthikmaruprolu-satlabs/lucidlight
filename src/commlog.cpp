@@ -17,7 +17,53 @@ CommLog::CommLog(QObject *parent) : QAbstractListModel(parent) {
 }
 
 int CommLog::rowCount(const QModelIndex &parent) const {
-    return parent.isValid() ? 0 : m_rows.size();
+    if (parent.isValid())
+        return 0;
+    return m_channelFilter == 0 ? m_rows.size() : filteredCount();
+}
+
+int CommLog::filteredCount() const {
+    int n = 0;
+    for (const Row &row : m_rows)
+        if (filterAccepts(row))
+            ++n;
+    return n;
+}
+
+bool CommLog::filterAccepts(const Row &row) const {
+    switch (m_channelFilter) {
+    case 1:
+        return row.channel == 0;
+    case 2:
+        return row.channel == 1;
+    case 3:
+        return row.direction == Comment || row.direction == Event;
+    default:
+        return true;
+    }
+}
+
+void CommLog::setChannelFilter(int filter) {
+    const int clamped = qBound(0, filter, 3);
+    if (clamped == m_channelFilter)
+        return;
+    m_channelFilter = clamped;
+    beginResetModel();
+    endResetModel();
+    emit filterChanged();
+}
+
+int CommLog::physicalRow(int viewRow) const {
+    if (viewRow < 0 || viewRow >= rowCount({}))
+        return -1;
+    if (m_channelFilter == 0)
+        return viewRow;
+    int n = -1;
+    for (int i = 0; i < m_rows.size(); ++i) {
+        if (filterAccepts(m_rows.at(i)) && ++n == viewRow)
+            return i;
+    }
+    return -1;
 }
 
 QHash<int, QByteArray> CommLog::roleNames() const {
@@ -36,11 +82,14 @@ QHash<int, QByteArray> CommLog::roleNames() const {
 }
 
 QVariant CommLog::data(const QModelIndex &index, int role) const {
-    if (!index.isValid() || index.row() >= m_rows.size())
+    if (!index.isValid() || index.row() >= rowCount({}))
         return {};
-    const Row &row = m_rows.at(index.row());
+    const int physical = physicalRow(index.row());
+    if (physical < 0)
+        return {};
+    const Row &row = m_rows.at(physical);
     switch (role) {
-    case IndexRole: return index.row() + m_trimmed + 1;
+    case IndexRole: return physical + m_trimmed + 1;
     case ClockRole: return clockString(row.stampMs);
     case DeltaRole: return deltaString(row.deltaMs);
     case DirectionRole: return row.direction;

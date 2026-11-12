@@ -7,6 +7,7 @@
 #include "channelsettings.h"
 #include "commlog.h"
 #include "commmanager.h"
+#include "filelogger.h"
 #include "dlscript.h"
 #include "portenumerator.h"
 #include "portalpicker.h"
@@ -76,10 +77,53 @@ public:
     // Extra bytes above the last log entry, for the highlight pass.
     static constexpr int NoChannel = -1;
 
+    // ---- script bridge (worker thread calls these via invokeMethod) --------
+    Q_INVOKABLE int scriptReceiveCount(int id);
+    Q_INVOKABLE void scriptResetCounters(int id);          // -1 = all
+    Q_INVOKABLE QString scriptDrainReceiveComments();
+    Q_INVOKABLE QString scriptChannelSettings(int channel);
+    Q_INVOKABLE bool scriptSetChannelSettings(const QString &settings, int channel);
+    Q_INVOKABLE int scriptChannelStatus(int channel);
+    Q_INVOKABLE bool scriptOpenProject(const QString &path);
+    Q_INVOKABLE void scriptSetContentsFilter(int filter);
+    Q_INVOKABLE void scriptSetWindowLayout(const QString &layout);
+    Q_INVOKABLE QString scriptCommWindowData(const QString &representation);
+    Q_INVOKABLE bool scriptStartLogging(const QString &path, bool appendData,
+                                        const QString &representations, int format,
+                                        bool noHeaders);
+    Q_INVOKABLE void scriptStopLogging();
+    Q_INVOKABLE void scriptSetUserOutput(const QString &text);
+    Q_INVOKABLE QString scriptPortList();
+    Q_INVOKABLE bool scriptLoadOptions(const QString &path);
+    Q_INVOKABLE bool scriptSaveOptions(const QString &path);
+    // The heart of DL.SendSequence: builds the parameter/checksum-processed
+    // element stream, runs the DL_OnSend event procedure when a script is
+    // parked, and transmits with delays, breaks and signal changes.
+    Q_INVOKABLE void scriptSendSequence(int row, const QString &customData,
+                                        const QString &representation,
+                                        const QStringList &parameters);
+    // Manual send with wildcard parameters answered by the dialog.
+    Q_INVOKABLE void sendSequenceWithParams(int row, const QStringList &parameters);
+    // QML answers a script dialog; value -1 = input box text via textValue.
+    Q_INVOKABLE void answerScriptDialog(int value, const QString &textValue);
+
+public slots:
+    void scriptDialog(const QString &prompt, int buttons, const QString &title,
+                      bool input, const QString &defaultText);
+
 signals:
     void stateChanged();
     void scriptChanged();
     void toast(const QString &text);
+    // Blocking script dialogs (DL.MsgBox2 / DL.InputBox2); QML shows the
+    // dialog and answers via answerScriptDialog.
+    void scriptDialogRequested(const QString &prompt, int buttons, const QString &title,
+                               bool input, const QString &defaultText);
+    // Sequence with wildcards needs parameter values before it can be sent.
+    void parameterRequest(int row, const QStringList &minLengths);
+    void userOutputChanged(const QString &text);
+    void contentsFilterChanged(int filter);
+    void windowLayoutChanged(const QString &layout);
 
 private slots:
     void handleIncoming(int channel, const QByteArray &data);
@@ -88,13 +132,23 @@ private slots:
     void checkRepeats();
     void scriptFinished(bool ok, const QString &error);
 
+private slots:
+    void scriptSendSequenceDone();
+
 private:
+    void transmitElements(const QVector<ParsedBytes::Element> &elements);
+    bool buildSendElements(const Sequence &seq, const QStringList &parameters,
+                           DataFormat::Format paramFormat,
+                           QVector<ParsedBytes::Element> *out, QString *error);
     void wireDirtyTracking();
     void applyTrigger(const Sequence *receiveSequence, const QByteArray &matched);
     void syncMatcher();
     QString expandCommentMacros(const QString &text, const Sequence *seq,
                                 const QByteArray &received, int channel);
     int indexOfSequence(int id) const;
+    void armRepeat(const Sequence *seq);
+    void logComment(const QString &text);
+    void logEvent(const QString &text);
 
     CommManager *m_comm;
     ChannelSettings *m_a;
@@ -105,6 +159,7 @@ private:
     PortEnumerator *m_ports;
     PortalPicker *m_picker;
     SequenceMatcher m_matcher;
+    FileLogger m_logger;
 
     bool m_dirty = false;
     QString m_projectPath;
@@ -112,6 +167,7 @@ private:
     bool m_pendingHighlight = false;
 
     QHash<int, int> m_receiveCounts;   // Docklight Receive Sequence hit counters
+    QStringList m_receiveComments;     // drained by DL.GetReceiveComments
 
     QTimer m_repeatTimer;
     QHash<int, qint64> m_nextRepeatAt;

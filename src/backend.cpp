@@ -20,10 +20,16 @@ Backend::Backend(QObject *parent)
       m_b(new ChannelSettings(this)),
       m_sequences(new SequenceModel(this)),
       m_log(new CommLog(this)),
-      m_runner(new ScriptRunner(m_comm, m_sequences, this)),
+      m_runner(new ScriptRunner(m_comm, m_sequences, this, this)),
       m_ports(new PortEnumerator(this)),
       m_picker(new PortalPicker(this)) {
     connect(m_comm, &CommManager::incoming, this, &Backend::handleIncoming);
+    // DL.SendSequence requests from the script engine arrive queued; the
+    // engine parks until scriptSendSequenceDone() flows back.
+    connect(m_runner, &ScriptRunner::sendRequest, this, &Backend::scriptSendSequence,
+            Qt::QueuedConnection);
+    connect(m_runner, &ScriptRunner::dialogRequest, this, &Backend::scriptDialog,
+            Qt::QueuedConnection);
     connect(m_comm, &CommManager::transmitted, this, &Backend::handleTransmitted);
     connect(m_comm, &CommManager::eventLogged, m_log, [this](const QString &text) {
         m_log->appendEvent(text);
@@ -107,10 +113,14 @@ void Backend::handleIncoming(int channel, const QByteArray &data) {
     const bool highlighted = m_pendingHighlight;
     m_pendingHighlight = false;
     m_log->append(CommLog::Rx, channel, data, highlighted);
+    m_logger.onRow(CommLog::Rx, channel, data, QString(),
+                   QDateTime::currentMSecsSinceEpoch(), highlighted);
 }
 
 void Backend::handleTransmitted(int channel, const QByteArray &data) {
     m_log->append(CommLog::Tx, channel, data);
+    m_logger.onRow(CommLog::Tx, channel, data, QString(),
+                   QDateTime::currentMSecsSinceEpoch(), false);
 }
 
 void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens) {
@@ -119,11 +129,21 @@ void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token
     for (const SequenceMatcher::Token &t : tokens)
         if (t.kind == SequenceMatcher::Token::Data)
             received.append(char(t.value));
-    for (const Sequence &seq : m_sequences->sequences()) {
+    for (int i = 0; i < m_sequences->sequences().size(); ++i) {
+        const Sequence &seq = m_sequences->sequences().at(i);
         if (seq.id != sequenceId || !seq.enabled)
             continue;
         // Docklight counts every detection since start/reset.
         m_receiveCounts[sequenceId]++;
+        // The running script gets the match queued as a DL_OnReceive event.
+        DLScriptEngine *engine = m_runner ? m_runner->engine() : nullptr;
+        if (engine) {
+            QMetaObject::invokeMethod(engine, "onReceiveEvent", Qt::QueuedConnection,
+                                      Q_ARG(int, seq.id), Q_ARG(int, i),
+                                      Q_ARG(QString, seq.name), Q_ARG(QByteArray, received),
+                                      Q_ARG(int, 1),
+                                      Q_ARG(qint64, QDateTime::currentMSecsSinceEpoch()));
+        }
         applyTrigger(&seq, received);
         break;
     }
@@ -244,8 +264,10 @@ void Backend::applyTrigger(const Sequence *receiveSequence, const QByteArray &ma
     // Action: Comment — macro-expanded text into the log.
     if (!receiveSequence->comment.isEmpty()) {
         const int channel = m_comm->mode() == CommManager::Monitor ? 1 : 1;
-        m_log->appendComment(expandCommentMacros(receiveSequence->comment, receiveSequence,
-                                                 matched, channel));
+        const QString expanded = expandCommentMacros(receiveSequence->comment, receiveSequence,
+                                                     matched, channel);
+        logComment(expanded);
+        m_receiveComments.append(expanded);
     }
     // Action: Trigger — snapshot mark (highlighted rows in the log).
     if (receiveSequence->trigger)
@@ -328,25 +350,59 @@ void Backend::sendSequence(int row) {
     const Sequence *seq = m_sequences->sequenceAt(row);
     if (!seq || !seq->isSend)
         return;
+    // A sequence with wildcard parameters asks for values first, exactly
+    // like Docklight's Send Sequence Parameter dialog.
     const auto parsed = DataFormat::parse(seq->data, seq->format);
     if (!parsed.ok()) {
         emit toast(tr("%1: %2").arg(seq->name, parsed.error));
         return;
     }
-    if (!m_comm->send(parsed.bytes())) {
-        if (!m_comm->running())
-            emit toast(tr("Communication is not running"));
-        return;
-    }
-    if (seq->repeatIntervalMs > 0) {
-        if (m_nextRepeatAt.contains(seq->id)) {
-            m_nextRepeatAt.remove(seq->id);
-            m_log->appendEvent(tr("Repeat stopped: %1").arg(seq->name));
-        } else {
-            m_nextRepeatAt.insert(seq->id, m_repeatClock.elapsed() + seq->repeatIntervalMs);
-            m_log->appendEvent(tr("Repeat every %1 ms: %2").arg(seq->repeatIntervalMs).arg(seq->name));
+    QStringList minLengths;
+    int run = 0;
+    for (const auto &e : parsed.elements) {
+        if (e.kind == ParsedBytes::Element::WildOne
+            || e.kind == ParsedBytes::Element::WildZeroOrOne)
+            ++run;
+        else if (run) {
+            minLengths.append(QString::number(run));
+            run = 0;
         }
     }
+    if (run)
+        minLengths.append(QString::number(run));
+    if (!minLengths.isEmpty()) {
+        // Consecutive wildcard positions form one parameter each.
+        emit parameterRequest(row, minLengths);
+        return;
+    }
+    transmitElements(parsed.elements);
+    armRepeat(seq);
+}
+
+void Backend::armRepeat(const Sequence *seq) {
+    if (!seq || seq->repeatIntervalMs <= 0)
+        return;
+    if (m_nextRepeatAt.contains(seq->id)) {
+        m_nextRepeatAt.remove(seq->id);
+        m_log->appendEvent(tr("Repeat stopped: %1").arg(seq->name));
+    } else {
+        m_nextRepeatAt.insert(seq->id, m_repeatClock.elapsed() + seq->repeatIntervalMs);
+        m_log->appendEvent(tr("Repeat every %1 ms: %2").arg(seq->repeatIntervalMs).arg(seq->name));
+    }
+}
+
+void Backend::sendSequenceWithParams(int row, const QStringList &parameters) {
+    const Sequence *seq = m_sequences->sequenceAt(row);
+    if (!seq || !seq->isSend)
+        return;
+    QVector<ParsedBytes::Element> elements;
+    QString error;
+    if (!buildSendElements(*seq, parameters, DataFormat::Format::Text, &elements, &error)) {
+        emit toast(tr("%1: %2").arg(seq->name, error));
+        return;
+    }
+    transmitElements(elements);
+    armRepeat(seq);
 }
 
 void Backend::sendByHotkey(int keyNumber) {
@@ -379,6 +435,483 @@ void Backend::checkRepeats() {
             break;
         }
     }
+}
+
+// Fills wildcard runs with the given parameters and applies the checksum
+// area, producing the final element stream to transmit.
+bool Backend::buildSendElements(const Sequence &seq, const QStringList &parameters,
+                                DataFormat::Format paramFormat,
+                                QVector<ParsedBytes::Element> *out, QString *error) {
+    const auto parsed = DataFormat::parse(seq.data, seq.format);
+    if (!parsed.ok()) {
+        if (error)
+            *error = parsed.error;
+        return false;
+    }
+    QVector<ParsedBytes::Element> elements = parsed.elements;
+
+    // Docklight: consecutive wildcards form one parameter. ASCII parameters
+    // are space-separated; HEX/DEC/BIN use commas. Shortfalls pad with
+    // spaces (ASCII) or zero bytes, surplus is truncated.
+    QStringList params = parameters;
+    int run = 0, paramIndex = 0;
+    QVector<std::pair<int, int>> runs;   // first element index, length
+    for (int i = 0; i < elements.size(); ++i) {
+        const auto kind = elements.at(i).kind;
+        if (kind == ParsedBytes::Element::WildOne
+            || kind == ParsedBytes::Element::WildZeroOrOne) {
+            if (run == 0)
+                runs.append({i, 0});
+            ++run;
+            runs.last().second = run;
+        } else if (run) {
+            run = 0;
+        }
+    }
+    const auto fillByte = [&](uchar &value, const QString &text) {
+        if (paramFormat == DataFormat::Format::Text) {
+            const QByteArray encoded = text.left(1).toUtf8();
+            value = encoded.isEmpty() ? uchar(0x20) : uchar(encoded.at(0));
+            return;
+        }
+        bool ok = false;
+        const int number = paramFormat == DataFormat::Format::Hex
+                               ? text.toInt(&ok, 16)
+                               : paramFormat == DataFormat::Format::Dec
+                                     ? text.toInt(&ok, 10)
+                                     : text.toInt(&ok, 2);
+        value = uchar(ok ? qBound(0, number, 255) : 0);
+    };
+    for (const auto &runInfo : runs) {
+        const QString param = paramIndex < params.size() ? params.at(paramIndex) : QString();
+        ++paramIndex;
+        QStringList pieces;
+        if (paramFormat == DataFormat::Format::Text)
+            pieces = param.isEmpty() ? QStringList{QString()} : param.split(' ');
+        else
+            pieces = param.split(',', Qt::SkipEmptyParts);
+        for (int k = 0; k < runInfo.second; ++k) {
+            const QString piece = k < pieces.size() ? pieces.at(k) : QString();
+            uchar value = paramFormat == DataFormat::Format::Text ? 0x20 : 0;
+            fillByte(value, piece);
+            elements[runInfo.first + k].kind = ParsedBytes::Element::Data;
+            elements[runInfo.first + k].value = value;
+        }
+    }
+
+    // Checksum area: operate on the byte image of the data positions.
+    if (!seq.checksumSpec.isEmpty()) {
+        const Checksum::Area area = Checksum::parseArea(seq.checksumSpec);
+        if (!area.ok) {
+            if (error)
+                *error = area.error;
+            return false;
+        }
+        QByteArray image;
+        QVector<int> byteToElement;
+        for (int i = 0; i < elements.size(); ++i) {
+            if (elements.at(i).kind == ParsedBytes::Element::Data) {
+                image.append(char(elements.at(i).value));
+                byteToElement.append(i);
+            }
+        }
+        if (!Checksum::applyToSequence(area, image, error))
+            return false;
+        for (int b = 0; b < image.size() && b < byteToElement.size(); ++b)
+            elements[byteToElement.at(b)].value = uchar(image.at(b));
+    }
+
+    *out = elements;
+    return true;
+}
+
+// Transmits a prepared element stream: byte runs go out as bursts, delays
+// park the send in the event loop, break and '!' elements drive the line.
+void Backend::transmitElements(const QVector<ParsedBytes::Element> &elements) {
+    QByteArray burst;
+    int paritySetting = -1;   // '!' parity changes, restored afterwards
+    auto flushBurst = [&]() {
+        if (!burst.isEmpty()) {
+            if (!m_comm->send(burst) && !m_comm->running())
+                emit toast(tr("Communication is not running"));
+            burst.clear();
+        }
+    };
+    for (const auto &e : elements) {
+        switch (e.kind) {
+        case ParsedBytes::Element::Data:
+            burst.append(char(e.value));
+            break;
+        case ParsedBytes::Element::WildOne:
+        case ParsedBytes::Element::WildZeroOrOne:
+            burst.append(char(0x20));   // unfilled wildcard (defensive)
+            break;
+        case ParsedBytes::Element::Bitwise:
+            break;   // receive-only
+        case ParsedBytes::Element::Delay: {
+            flushBurst();
+            QEventLoop loop;
+            QTimer::singleShot(int(e.value) * 10, &loop, &QEventLoop::quit);
+            loop.exec();
+            break;
+        }
+        case ParsedBytes::Element::Break:
+            flushBurst();
+            m_comm->sendBreak(200);
+            break;
+        case ParsedBytes::Element::Handshake: {
+            flushBurst();
+            const uchar v = e.value;
+            if (v <= 3) {
+                m_comm->setRTS(0, v & 1);
+                m_comm->setDTR(0, v & 2);
+            } else if (v >= 16 && v <= 80) {
+                // 16 none, 32 odd, 48 even, 64 mark, 80 space
+                const int parity = v == 16 ? 0 : v == 32 ? 2 : v == 48 ? 1
+                                      : v == 64 ? 3 : 4;
+                if (paritySetting < 0)
+                    paritySetting = m_comm->link(0)->parity();
+                m_comm->link(0)->setParity(parity);
+            }
+            break;
+        }
+        }
+    }
+    flushBurst();
+    if (paritySetting >= 0)
+        m_comm->link(0)->setParity(paritySetting);
+}
+
+// ---- script bridge --------------------------------------------------------
+
+int Backend::scriptReceiveCount(int id) {
+    return m_receiveCounts.value(id, 0);
+}
+
+void Backend::scriptResetCounters(int id) {
+    if (id < 0)
+        m_receiveCounts.clear();
+    else
+        m_receiveCounts.remove(id);
+    if (id < 0)
+        m_matcher.reset();
+}
+
+QString Backend::scriptDrainReceiveComments() {
+    const QStringList drained = m_receiveComments;
+    m_receiveComments.clear();
+    return drained.join(QLatin1Char('\n'));
+}
+
+QString Backend::scriptChannelSettings(int channel) {
+    const ChannelSettings *settings = channel == 1 ? m_b : m_a;
+    const SerialConfig &config = settings->config();
+    static const char *parityNames[] = {"NONE", "EVEN", "ODD", "MARK", "SPACE"};
+    static const char *flowNames[] = {"OFF", "RTSCTS", "XONXOFF", "RTSSEND"};
+    return QStringLiteral("%1:%2,%3,%4,%5,%6")
+        .arg(config.device,
+             QString::number(config.baud),
+             parityNames[qBound(0, config.parity, 4)],
+             QString::number(config.dataBits),
+             QString::number(config.stopBits),
+             flowNames[qBound(0, config.flow, 3)]);
+}
+
+bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
+    ChannelSettings *target = channel == 1 ? m_b : m_a;
+    QString text = settings.trimmed();
+    if (text == QLatin1String(">")) {
+        // Find the next available serial port.
+        const QStringList ports = m_ports->ports();
+        const QString current = target->config().device;
+        int index = ports.indexOf(current);
+        for (int step = 1; step <= ports.size(); ++step) {
+            const QString candidate = ports.at((qMax(0, index) + step) % ports.size());
+            SerialLink probe;
+            SerialConfig config = target->config();
+            config.device = candidate;
+            if (probe.open(config)) {
+                probe.close();
+                target->setDevice(candidate);
+                return true;
+            }
+        }
+        return false;
+    }
+    // Forms: "DEVICE", "DEVICE:baud,P,D,S[,FLOW[,PEC]]", "baud,P,D,S..."
+    const int colon = text.indexOf(QLatin1Char(':'));
+    QString devicePart, tail;
+    if (colon > 0 && !text.left(colon).contains(',')) {
+        devicePart = text.left(colon).trimmed();
+        tail = text.mid(colon + 1).trimmed();
+    } else if (text.contains(',')) {
+        tail = text;
+    } else {
+        devicePart = text;
+    }
+    if (!devicePart.isEmpty())
+        target->setDevice(devicePart);
+    if (!tail.isEmpty()) {
+        const QStringList parts = tail.split(',');
+        bool ok = false;
+        const int baud = parts.value(0).trimmed().toInt(&ok);
+        if (ok && baud > 0)
+            target->setBaud(baud);
+        const QString parity = parts.value(1).trimmed().toUpper();
+        int parityValue = -1;
+        if (parity == "NONE") parityValue = 0;
+        else if (parity == "EVEN") parityValue = 1;
+        else if (parity == "ODD") parityValue = 2;
+        else if (parity == "MARK") parityValue = 3;
+        else if (parity == "SPACE") parityValue = 4;
+        if (parityValue >= 0)
+            target->setParity(parityValue);
+        const int dataBits = parts.value(2).trimmed().toInt();
+        if (dataBits >= 5 && dataBits <= 8)
+            target->setDataBits(dataBits);
+        const int stopBits = parts.value(3).trimmed().toInt();
+        if (stopBits == 1 || stopBits == 2)
+            target->setStopBits(stopBits);
+        const QString flow = parts.value(4).trimmed().toUpper();
+        int flowValue = -1;
+        if (flow == "OFF") flowValue = 0;
+        else if (flow == "RTSCTS") flowValue = 1;
+        else if (flow == "XONXOFF") flowValue = 2;
+        if (flowValue >= 0)
+            target->setFlow(flowValue);
+    }
+    // A running link picks the new settings up on restart; test the port.
+    SerialLink probe;
+    if (probe.open(target->config())) {
+        probe.close();
+        if (m_comm->running())
+            m_comm->restart();
+        return true;
+    }
+    return false;
+}
+
+int Backend::scriptChannelStatus(int channel) {
+    if (!m_comm->running())
+        return 0;
+    const SerialLink *link = m_comm->link(channel == 1 ? 1 : 0);
+    if (!link->isOpen())
+        return 3;
+    return 1;
+}
+
+bool Backend::scriptOpenProject(const QString &path) {
+    const QString trimmed = path.trimmed();
+    QString error;
+    if (trimmed.isEmpty())
+        return false;
+    // Reading is quick and safe enough from the bridge call.
+    QFile file(trimmed.endsWith(".llproj", Qt::CaseInsensitive) ? trimmed : trimmed + ".llproj");
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    error = Project::load(doc.object(), m_comm, m_a, m_b, m_sequences,
+                          &m_scriptSource, m_log);
+    if (!error.isEmpty())
+        return false;
+    m_projectPath = file.fileName();
+    setDirty(false);
+    emit scriptChanged();
+    syncMatcher();
+    m_receiveCounts.clear();
+    return true;
+}
+
+void Backend::scriptSetContentsFilter(int filter) {
+    emit contentsFilterChanged(qBound(0, filter, 3));
+}
+
+void Backend::scriptSetWindowLayout(const QString &layout) {
+    emit windowLayoutChanged(layout);
+}
+
+QString Backend::scriptCommWindowData(const QString &representation) {
+    QByteArray all;
+    for (const auto &row : m_log->rows())
+        all.append(row.data);
+    if (representation.compare(QLatin1String("H"), Qt::CaseInsensitive) == 0)
+        return DataFormat::toHex(all);
+    if (representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0)
+        return DataFormat::display(all, DataFormat::Format::Dec);
+    if (representation.compare(QLatin1String("B"), Qt::CaseInsensitive) == 0) {
+        QString bin;
+        for (uchar byte : all) {
+            if (!bin.isEmpty())
+                bin += QLatin1Char(' ');
+            bin += QString("%1").arg(byte, 8, 2, QChar('0'));
+        }
+        return bin;
+    }
+    return DataFormat::display(all, DataFormat::Format::Text);
+}
+
+bool Backend::scriptStartLogging(const QString &path, bool appendData,
+                                 const QString &representations, int format,
+                                 bool noHeaders) {
+    return m_logger.start(path, appendData, representations, format, noHeaders);
+}
+
+void Backend::scriptStopLogging() {
+    m_logger.stop();
+}
+
+void Backend::scriptSetUserOutput(const QString &text) {
+    emit userOutputChanged(text);
+}
+
+// DL.SendSequence: the worker posts the request, waits while parked, and
+// this slot runs on the main thread where the ports live.
+void Backend::scriptSendSequence(int row, const QString &customData,
+                                 const QString &representation,
+                                 const QStringList &parameters) {
+    QVector<ParsedBytes::Element> elements;
+    if (row >= 0) {
+        const Sequence *seq = m_sequences->sequenceAt(row);
+        if (!seq || !seq->isSend) {
+            emit scriptSendSequenceDone();
+            return;
+        }
+        DataFormat::Format paramFormat = DataFormat::Format::Text;
+        if (representation.compare(QLatin1String("H"), Qt::CaseInsensitive) == 0)
+            paramFormat = DataFormat::Format::Hex;
+        else if (representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0)
+            paramFormat = DataFormat::Format::Dec;
+        else if (representation.compare(QLatin1String("B"), Qt::CaseInsensitive) == 0)
+            paramFormat = DataFormat::Format::Dec;   // binary uses decimal numbers
+        QString error;
+        if (!buildSendElements(*seq, parameters, paramFormat, &elements, &error)) {
+            m_log->appendEvent(tr("SendSequence %1: %2").arg(seq->name, error));
+            emit scriptSendSequenceDone();
+            return;
+        }
+        // Let the parked script manipulate the data via DL_OnSend().
+        if (m_runner->running() && m_runner->engine()) {
+            QByteArray bytes;
+            for (const auto &e : elements)
+                if (e.kind == ParsedBytes::Element::Data
+                    || e.kind == ParsedBytes::Element::WildOne
+                    || e.kind == ParsedBytes::Element::WildZeroOrOne)
+                    bytes.append(char(e.value));
+            QByteArray modified;
+            QString name = seq->name;
+            const int index = row;
+            QMetaObject::invokeMethod(m_runner->engine(), "processOnSend",
+                                      Qt::BlockingQueuedConnection,
+                                      Q_RETURN_ARG(QByteArray, modified),
+                                      Q_ARG(QString, name), Q_ARG(int, index),
+                                      Q_ARG(QByteArray, bytes));
+            if (!modified.isEmpty() && modified != bytes) {
+                const auto parsed = DataFormat::parse(
+                    DataFormat::toHex(modified), DataFormat::Format::Hex);
+                elements = parsed.ok() ? parsed.elements : elements;
+            }
+        }
+    } else if (!customData.isEmpty()) {
+        DataFormat::Format format = DataFormat::Format::Text;
+        if (representation.compare(QLatin1String("H"), Qt::CaseInsensitive) == 0)
+            format = DataFormat::Format::Hex;
+        else if (representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0)
+            format = DataFormat::Format::Dec;
+        const auto parsed = DataFormat::parse(customData, format);
+        if (!parsed.ok()) {
+            emit scriptSendSequenceDone();
+            return;
+        }
+        elements = parsed.elements;
+    }
+    if (!m_comm->running())
+        m_comm->restart();
+    transmitElements(elements);
+    emit scriptSendSequenceDone();
+}
+
+void Backend::scriptSendSequenceDone() {
+    // The worker parks on this counter; nothing else to do here.
+}
+
+QString Backend::scriptPortList() {
+    return m_ports->ports().join(QLatin1Char('\n'));
+}
+
+bool Backend::scriptLoadOptions(const QString &path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    const QJsonObject options = QJsonDocument::fromJson(file.readAll()).object();
+    const QJsonObject display = options.value("display").toObject();
+    m_log->setDisplayFormat(Project::displayFormatFromName(
+        display.value("format").toString(QStringLiteral("text"))));
+    m_log->setShowTimestamps(display.value("timestamps").toBool(true));
+    m_log->setShowDelta(display.value("delta").toBool(false));
+    return true;
+}
+
+bool Backend::scriptSaveOptions(const QString &path) {
+    QJsonObject options;
+    QJsonObject display;
+    display["format"] = Project::displayFormatName(m_log->displayFormat());
+    display["timestamps"] = m_log->showTimestamps();
+    display["delta"] = m_log->showDelta();
+    options["display"] = display;
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+        return false;
+    file.write(QJsonDocument(options).toJson());
+    return true;
+}
+
+// Script dialogs: hand the request to the UI (or the headless runner, which
+// answers from the environment) and wake the worker when the answer lands.
+void Backend::scriptDialog(const QString &prompt, int buttons, const QString &title,
+                           bool input, const QString &defaultText) {
+    // Headless auto-answer: LUCID_MSGBOX=6 answers buttons, LUCID_INPUTBOX
+    // provides text; without them a message box cancels and an input box
+    // returns the default text.
+    const QByteArray boxAnswer = qgetenv(input ? "LUCID_INPUTBOX" : "LUCID_MSGBOX");
+    if (boxAnswer.isEmpty() && !qEnvironmentVariableIsEmpty("LUCID_HEADLESS")) {
+        DLScriptEngine *engine = m_runner ? m_runner->engine() : nullptr;
+        if (engine) {
+            const int answer = input ? 0
+                                     : (buttons & 4 ? 6 : 1);   // yes for yes/no, else OK
+            QMetaObject::invokeMethod(engine, "onDialogResult", Qt::QueuedConnection,
+                                      Q_ARG(int, answer));
+            if (input)
+                // text answers ride the dialog result through onDialogResult's
+                // int channel only for buttons; input needs a string channel.
+                QMetaObject::invokeMethod(engine, "onDialogText", Qt::QueuedConnection,
+                                          Q_ARG(QString, defaultText));
+        }
+        return;
+    }
+    emit scriptDialogRequested(prompt, buttons, title, input, defaultText);
+}
+
+void Backend::answerScriptDialog(int value, const QString &textValue) {
+    DLScriptEngine *engine = m_runner ? m_runner->engine() : nullptr;
+    if (!engine)
+        return;
+    QMetaObject::invokeMethod(engine, "onDialogResult", Qt::QueuedConnection, Q_ARG(int, value));
+    if (!textValue.isEmpty())
+        QMetaObject::invokeMethod(engine, "onDialogText", Qt::QueuedConnection,
+                                  Q_ARG(QString, textValue));
+}
+
+// Comments and events join the log files as well, as Docklight does.
+void Backend::logComment(const QString &text) {
+    m_log->appendComment(text);
+    m_logger.onRow(CommLog::Comment, -1, QByteArray(), text,
+                   QDateTime::currentMSecsSinceEpoch(), false);
+}
+
+void Backend::logEvent(const QString &text) {
+    m_log->appendEvent(text);
+    m_logger.onRow(CommLog::Event, -1, QByteArray(), text,
+                   QDateTime::currentMSecsSinceEpoch(), false);
 }
 
 void Backend::clearLog() {
