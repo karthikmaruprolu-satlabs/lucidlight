@@ -1,21 +1,27 @@
 #include "commmanager.h"
 
-CommManager::CommManager(QObject *parent) : QObject(parent) {
-    connect(&m_a, &SerialLink::received, this, [this](const QByteArray &data) { handleIncoming(0, data); });
-    connect(&m_b, &SerialLink::received, this, [this](const QByteArray &data) { handleIncoming(1, data); });
-    auto reportState = [this](SerialLink &link) {
-        if (link.isOpen())
-            emit eventLogged(QObject::tr("Port %1 opened").arg(link.device()));
-        else if (!link.lastError().isEmpty())
-            emit eventLogged(link.lastError());
-        emit runningChanged();
-    };
-    connect(&m_a, &SerialLink::stateChanged, this, [this, reportState] { reportState(m_a); });
-    connect(&m_b, &SerialLink::stateChanged, this, [this, reportState] { reportState(m_b); });
-}
+CommManager::CommManager(QObject *parent) : QObject(parent) {}
 
 CommManager::~CommManager() {
     stop();
+    delete m_a;
+    delete m_b;
+}
+
+// Wires one freshly created link into the routing.
+void CommManager::attach(CommLink *link, int channel) {
+    connect(link, &CommLink::received, this,
+            [this, channel](const QByteArray &data) { handleIncoming(channel, data); });
+    connect(link, &CommLink::stateChanged, this, [this, link, channel] {
+        if (link->isOpen())
+            emit eventLogged(QObject::tr("Port %1 opened").arg(link->device()));
+        else if (!link->lastError().isEmpty())
+            emit eventLogged(link->lastError());
+        else if (link->device().startsWith("SERVER:"))
+            emit eventLogged(QObject::tr("Port %1 waiting for a connection").arg(link->device()));
+        emit runningChanged();
+        Q_UNUSED(channel)
+    });
 }
 
 void CommManager::setMode(int mode) {
@@ -45,10 +51,14 @@ bool CommManager::start(const SerialConfig &a, const SerialConfig &b) {
     m_lastB = b;
     m_txBytes = 0;
     m_rxBytes = 0;
-    if (!m_a.open(a))
+    m_a = CommLink::create(a.device, this);
+    m_b = CommLink::create(b.device, this);
+    attach(m_a, 0);
+    attach(m_b, 1);
+    if (!m_a->open(a))
         return false;
-    if (m_mode != Single && !m_b.open(b)) {
-        m_a.close();
+    if (m_mode != Single && !m_b->open(b)) {
+        m_a->close();
         return false;
     }
     m_running = true;
@@ -64,8 +74,13 @@ void CommManager::stop() {
     if (!m_running)
         return;
     m_running = false;
-    m_a.close();
-    m_b.close();
+    if (m_a)
+        m_a->close();
+    if (m_b)
+        m_b->close();
+    delete m_a;
+    delete m_b;
+    m_a = m_b = nullptr;
     emit eventLogged(QObject::tr("Communication stopped"));
     emit runningChanged();
 }
@@ -75,7 +90,8 @@ bool CommManager::restart() {
 }
 
 void CommManager::sendBreak(int durationMs) {
-    m_a.sendBreak(durationMs);
+    if (m_a)
+        m_a->sendBreak(durationMs);
 }
 
 void CommManager::setDTR(int channel, bool on) {
@@ -98,10 +114,10 @@ bool CommManager::send(const QByteArray &data) {
 }
 
 bool CommManager::sendOn(int channel, const QByteArray &data) {
-    SerialLink &link = channel == 0 ? m_a : m_b;
-    if (!link.isOpen())
+    CommLink *link = channel == 0 ? m_a : m_b;
+    if (!link || !link->isOpen())
         return false;
-    const qint64 written = link.write(data);
+    const qint64 written = link->write(data);
     if (written <= 0)
         return false;
     m_txBytes += written;

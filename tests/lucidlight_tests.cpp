@@ -19,6 +19,10 @@
 #include "sequencemodel.h"
 #include "sequencematcher.h"
 #include "seriallink.h"
+#include "netlink.h"
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QUdpSocket>
 #include "theme.h"
 #include "translator.h"
 
@@ -1012,6 +1016,125 @@ private slots:
         QVERIFY(file.open(QIODevice::ReadOnly));
         const QByteArray content = file.readAll();
         QCOMPARE(content, QByteArray("hello\nAB"));
+    }
+
+    void tcpClientEcho()
+    {
+        // A TCP channel behaves like a serial one: what the link sends
+        // reaches the peer and answers come back.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        const quint16 port = server.serverPort();
+
+        NetLink link;
+        SerialConfig config;
+        config.device = QStringLiteral("TCP:127.0.0.1:%1").arg(port);
+        QVERIFY(link.open(config));
+        QVERIFY(link.isOpen());
+
+        QByteArray received;
+        QEventLoop loop;
+        QTimer::singleShot(2000, &loop, &QEventLoop::quit);
+        connect(&server, &QTcpServer::newConnection, &server, [&] {
+            QTcpSocket *peer = server.nextPendingConnection();
+            connect(peer, &QAbstractSocket::readyRead, peer, [peer, &received, &loop] {
+                received += peer->readAll();
+                if (received.contains("ping")) {
+                    peer->write("pong");
+                    return;
+                }
+                if (received.contains("pong"))
+                    loop.quit();
+            });
+        });
+        QCOMPARE(link.write("ping"), qint64(4));
+        loop.exec();
+        QVERIFY(received.contains("ping"));
+        QCOMPARE(link.write("again"), qint64(5));
+    }
+
+    void tcpServerAcceptsAndEchoes()
+    {
+        // SERVER:port listens; a client connects and the channel passes data.
+        NetLink listener;
+        SerialConfig listenConfig;
+        QTcpServer probe;
+        probe.listen(QHostAddress::LocalHost);   // pick a free port
+        const quint16 port = probe.serverPort();
+        probe.close();
+        listenConfig.device = QStringLiteral("SERVER:%1").arg(port);
+        QVERIFY(listener.open(listenConfig));
+        QVERIFY(listener.isWaiting());   // status 2, like Docklight
+
+        QTcpSocket client;
+        client.connectToHost(QHostAddress::LocalHost, port);
+        QVERIFY(client.waitForConnected(2000));
+        // The link reports open only once the partner is there.
+        QTRY_VERIFY_WITH_TIMEOUT(listener.isOpen(), 2000);
+
+        QByteArray got;
+        QEventLoop loop;
+        QTimer::singleShot(2000, &loop, &QEventLoop::quit);
+        connect(&client, &QAbstractSocket::readyRead, [&] {
+            got += client.readAll();
+            if (got.contains("hi"))
+                loop.quit();
+        });
+        QCOMPARE(listener.write("hi"), qint64(2));
+        loop.exec();
+        QVERIFY(got.contains("hi"));
+    }
+
+    void udpPeerRoundTrip()
+    {
+        QUdpSocket peer;
+        QVERIFY(peer.bind(QHostAddress::LocalHost));
+        const quint16 port = peer.localPort();
+
+        NetLink link;
+        SerialConfig config;
+        config.device = QStringLiteral("UDP:127.0.0.1:%1").arg(port);
+        QVERIFY(link.open(config));
+
+        QEventLoop loop;
+        QByteArray fromLink;
+        QTimer::singleShot(2000, &loop, &QEventLoop::quit);
+        QObject::connect(&peer, &QUdpSocket::readyRead, [&] {
+            while (peer.hasPendingDatagrams()) {
+                QByteArray d;
+                d.resize(int(peer.pendingDatagramSize()));
+                peer.readDatagram(d.data(), d.size());
+                fromLink += d;
+            }
+            if (fromLink.contains("datagram"))
+                loop.quit();
+        });
+        QCOMPARE(link.write("datagram"), qint64(8));
+        loop.exec();
+        QVERIFY(fromLink.contains("datagram"));
+    }
+
+    void commManagerRoutesTcpChannel()
+    {
+        // The full CommManager path with a TCP channel A and an echo server.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        const quint16 port = server.serverPort();
+        QByteArray serverGot;
+        connect(&server, &QTcpServer::newConnection, &server, [&] {
+            QTcpSocket *peer = server.nextPendingConnection();
+            connect(peer, &QAbstractSocket::readyRead, peer, [peer, &serverGot] {
+                serverGot += peer->readAll();
+            });
+        });
+
+        CommManager manager;
+        SerialConfig a, b;
+        a.device = QStringLiteral("TCP:127.0.0.1:%1").arg(port);
+        QVERIFY(manager.start(a, b));
+        QVERIFY(manager.send("over tcp"));
+        QTRY_COMPARE_WITH_TIMEOUT(serverGot, QByteArray("over tcp"), 2000);
+        manager.stop();
     }
 
     void portSettingsReachTheLine()

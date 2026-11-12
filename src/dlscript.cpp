@@ -399,7 +399,7 @@ void DLObject::SetHandshakeSignals(bool rts, bool dtr) {
 int DLObject::GetHandshakeSignals() {
     if (!m_host->m_comm)
         return 0;
-    const SerialLink *link = m_host->m_comm->link(0);
+    const CommLink *link = m_host->m_comm->link(0);
     return (link->cts() ? 1 : 0) | (link->dsr() ? 2 : 0) | (link->dcd() ? 4 : 0)
            | (link->ri() ? 8 : 0);
 }

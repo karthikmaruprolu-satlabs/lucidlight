@@ -1,4 +1,4 @@
-QT += core gui qml quick quickcontrols2 dbus
+QT += core gui qml quick quickcontrols2 dbus network
 
 CONFIG += c++17 release
 TARGET = lucidlight
@@ -8,6 +8,8 @@ HEADERS += \
     src/theme.h \
     src/translator.h \
     src/seriallink.h \
+    src/commlink.h \
+    src/netlink.h \
     src/portenumerator.h \
     src/dataformat.h \
     src/checksum.h \
@@ -28,6 +30,8 @@ SOURCES += \
     src/theme.cpp \
     src/translator.cpp \
     src/seriallink.cpp \
+    src/commlink.cpp \
+    src/netlink.cpp \
     src/portenumerator.cpp \
     src/dataformat.cpp \
     src/checksum.cpp \

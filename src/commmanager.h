@@ -3,7 +3,7 @@
 #include <QObject>
 #include <atomic>
 
-#include "seriallink.h"
+#include "commlink.h"
 
 // Owns the two serial links and routes bytes according to the communication
 // mode, the way Docklight's mode selector does:
@@ -48,7 +48,7 @@ public:
     Q_INVOKABLE void setDTR(int channel, bool on);
     Q_INVOKABLE void setRTS(int channel, bool on);
 
-    SerialLink *link(int channel) { return channel == 0 ? &m_a : &m_b; }
+    CommLink *link(int channel) { return channel == 0 ? m_a : m_b; }
 
 signals:
     void runningChanged();
@@ -62,9 +62,10 @@ signals:
 
 private:
     void handleIncoming(int channel, const QByteArray &data);
+    void attach(CommLink *link, int channel);
 
-    SerialLink m_a;
-    SerialLink m_b;
+    CommLink *m_a = nullptr;   // owned; created per start() from the device string
+    CommLink *m_b = nullptr;
     std::atomic_bool m_running {false};
     int m_mode = Single;
     qint64 m_txBytes = 0;

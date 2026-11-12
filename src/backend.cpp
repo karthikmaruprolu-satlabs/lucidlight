@@ -606,6 +606,9 @@ QString Backend::scriptDrainReceiveComments() {
 QString Backend::scriptChannelSettings(int channel) {
     const ChannelSettings *settings = channel == 1 ? m_b : m_a;
     const SerialConfig &config = settings->config();
+    // Network channels carry their whole configuration in the device string.
+    if (CommLink::isNetworkDevice(config.device))
+        return config.device;
     static const char *parityNames[] = {"NONE", "EVEN", "ODD", "MARK", "SPACE"};
     static const char *flowNames[] = {"OFF", "RTSCTS", "XONXOFF", "RTSSEND"};
     return QStringLiteral("%1:%2,%3,%4,%5,%6")
@@ -680,6 +683,13 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
         if (flowValue >= 0)
             target->setFlow(flowValue);
     }
+    // Network device strings carry their own configuration; accept them as
+    // they are. A serial device is probed before the settings stick.
+    if (CommLink::isNetworkDevice(target->config().device)) {
+        if (m_comm->running())
+            m_comm->restart();
+        return true;
+    }
     // A running link picks the new settings up on restart; test the port.
     SerialLink probe;
     if (probe.open(target->config())) {
@@ -694,7 +704,13 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
 int Backend::scriptChannelStatus(int channel) {
     if (!m_comm->running())
         return 0;
-    const SerialLink *link = m_comm->link(channel == 1 ? 1 : 0);
+    const CommLink *link = m_comm->link(channel == 1 ? 1 : 0);
+    if (!link)
+        return 3;
+    // A listening TCP server reports "waiting" until a partner connects,
+    // exactly like Docklight's status 2.
+    if (link->device().startsWith("SERVER:") && !link->isOpen())
+        return 2;
     if (!link->isOpen())
         return 3;
     return 1;

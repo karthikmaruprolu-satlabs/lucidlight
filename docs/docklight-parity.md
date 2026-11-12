@@ -13,8 +13,10 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [x] Communication Mode: Redirect (Docklight "Send/Receive with 2 channels")
 - [x] Communication Mode: Monitoring (2 ports, receive only, data forwarding)
 - [~] Serial COM ports — /dev/tty* via termios, incl. 9 data bits oddities
-- [ ] TCP client (`host:port`), TCP server (`SERVER:port`), TCP PROXY
-- [ ] UDP peer (`UDP:host:port`), UDP with split ports, UDP server (`UDP:port`)
+- [x] TCP client (`TCP:host:port`), TCP server (`SERVER:port`, status 2 while
+      listening) — TCP PROXY not yet
+- [x] UDP peer (`UDP:host:port`), UDP server (`UDP:port` binds, answers the
+      last sender) — split-port UDP not yet
 - [n/a] Docklight TAP / VTP hardware taps (Windows-only hardware)
 - [n/a] USB HID (needs hidapi; not installed)
 - [~] Named pipes — planned as Unix domain sockets / FIFOs

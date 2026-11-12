@@ -6,7 +6,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-SerialLink::SerialLink(QObject *parent) : QObject(parent) {}
+SerialLink::SerialLink(QObject *parent) : CommLink(parent) {}
 
 SerialLink::~SerialLink() {
     close();

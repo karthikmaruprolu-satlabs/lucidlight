@@ -54,6 +54,8 @@ Popup {
                 font.pixelSize: 12
                 font.family: win.monoFont
                 model: backend.ports.ports()
+                // Network channels are typed directly, Docklight-style.
+                placeholderText: qsTr("TCP:host:port · SERVER:port · UDP:host:port")
                 editText: root.channel === 0 ? backend.channelA.device : backend.channelB.device
                 onActivated: applyDevice()
                 onAccepted: applyDevice()
