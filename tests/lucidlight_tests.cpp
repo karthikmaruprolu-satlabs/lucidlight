@@ -1,0 +1,518 @@
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QJSValue>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QTemporaryDir>
+#include <QtTest>
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+
+#include "backend.h"
+#include "commmanager.h"
+#include "dataformat.h"
+#include "dlscript.h"
+#include "project.h"
+#include "sequencemodel.h"
+#include "sequencematcher.h"
+#include "seriallink.h"
+#include "theme.h"
+#include "translator.h"
+
+class LucidlightTests : public QObject {
+    Q_OBJECT
+
+private slots:
+    // ---- data notation ---------------------------------------------------
+    void textNotationParsesHexEscapes()
+    {
+        const auto parsed = DataFormat::parse("Hi[0D][0A]", DataFormat::Format::Text);
+        QVERIFY(parsed.ok());
+        QCOMPARE(parsed.bytes, QByteArray("Hi\r\n"));
+        QCOMPARE(parsed.wildcard.size(), 4);
+        QVERIFY(!parsed.wildcard.contains(true));
+    }
+
+    void textNotationLiteralBracketAndWildcards()
+    {
+        const auto parsed = DataFormat::parse("[[AB??", DataFormat::Format::Text);
+        QVERIFY(parsed.ok());
+        QByteArray expected("[AB");
+        expected.append(char(0));
+        QCOMPARE(parsed.bytes, expected);
+        QCOMPARE(parsed.wildcard.at(3), true);
+    }
+
+    void hexNotationParsesPairsAndWildcards()
+    {
+        const auto parsed = DataFormat::parse("48 65 ?? 6C", DataFormat::Format::Hex);
+        QVERIFY(parsed.ok());
+        QByteArray expected("Hel");
+        expected[2] = char(0);
+        expected.append('l');
+        QCOMPARE(parsed.bytes, expected);
+        QCOMPARE(parsed.wildcard.at(2), true);
+    }
+
+    void hexNotationRejectsOddDigits()
+    {
+        QVERIFY(!DataFormat::parse("486", DataFormat::Format::Hex).ok());
+    }
+
+    void decNotationParsesValues()
+    {
+        const auto parsed = DataFormat::parse("72 101, 108", DataFormat::Format::Dec);
+        QVERIFY(parsed.ok());
+        QCOMPARE(parsed.bytes, QByteArray("Hel"));
+    }
+
+    void decNotationRejectsOutOfRange()
+    {
+        QVERIFY(!DataFormat::parse("256", DataFormat::Format::Dec).ok());
+    }
+
+    void displayFormats()
+    {
+        const QByteArray data("Hi\r");
+        QCOMPARE(DataFormat::display(data, DataFormat::Format::Text), QString("Hi") + QChar(0xB7));
+        QCOMPARE(DataFormat::display(data, DataFormat::Format::Hex), QString("48 69 0D"));
+        QCOMPARE(DataFormat::display(data, DataFormat::Format::Dec), QString("72 105 13"));
+        QCOMPARE(DataFormat::toHex(QByteArray(1, '\x0F')), QString("0F"));
+    }
+
+    void textNotationRoundTrips()
+    {
+        const QByteArray raw = QByteArray("Text with [bracket] and ") + char(0x0D) + char(0xFF);
+        const QString notation = DataFormat::toTextNotation(raw);
+        const auto parsed = DataFormat::parse(notation, DataFormat::Format::Text);
+        QVERIFY(parsed.ok());
+        QCOMPARE(parsed.bytes, raw);
+    }
+
+    // ---- receive matching --------------------------------------------------
+    void matcherFiresOnExactPattern()
+    {
+        SequenceMatcher matcher;
+        QVector<SequenceMatcher::Pattern> patterns;
+        SequenceMatcher::Pattern pattern;
+        pattern.sequenceId = 7;
+        pattern.bytes = QByteArray("ACK");
+        patterns.append(pattern);
+        matcher.setPatterns(patterns);
+
+        int firedId = 0;
+        QByteArray firedBytes;
+        connect(&matcher, &SequenceMatcher::matched, [&](int id, const QByteArray &bytes) {
+            firedId = id;
+            firedBytes = bytes;
+        });
+        matcher.feed("xxACK");
+        QCOMPARE(firedId, 7);
+        QCOMPARE(firedBytes, QByteArray("xxACK"));
+    }
+
+    void matcherHonorsWildcardsAndSplits()
+    {
+        SequenceMatcher matcher;
+        QVector<SequenceMatcher::Pattern> patterns;
+        {
+            SequenceMatcher::Pattern pattern;
+            pattern.sequenceId = 1;
+            pattern.bytes = QByteArray::fromHex("0102FF03");  // ?? between 02 and 03
+            pattern.wildcard = {false, false, true, false};
+            patterns.append(pattern);
+        }
+        matcher.setPatterns(patterns);
+
+        int fires = 0;
+        connect(&matcher, &SequenceMatcher::matched, [&](int, const QByteArray &) { ++fires; });
+        matcher.feed(QByteArray::fromHex("0102AA03"));
+        QCOMPARE(fires, 1);
+        matcher.feed(QByteArray::fromHex("01020103"));
+        QCOMPARE(fires, 2);
+    }
+
+    void matcherIgnoresWhenNoPatterns()
+    {
+        SequenceMatcher matcher;
+        matcher.feed("anything");
+        // No crash, no signals — nothing connected anyway.
+    }
+
+    // ---- sequence model ------------------------------------------------------
+    void sequenceModelAddUpdateRemove()
+    {
+        SequenceModel model;
+        const int row = model.add({{"name", "Ping"}, {"isSend", true}, {"format", 0},
+                                   {"data", "PING"}, {"hotkey", 3}});
+        QCOMPARE(model.count(), 1);
+        QCOMPARE(model.sequences().at(row).name, QString("Ping"));
+        QCOMPARE(model.findSendByHotkey(3), row);
+        QCOMPARE(model.findSendByHotkey(4), -1);
+        model.update(row, {{"name", "Pong"}});
+        QCOMPARE(model.sequences().at(row).name, QString("Pong"));
+        model.remove(row);
+        QCOMPARE(model.count(), 0);
+    }
+
+    // ---- communication manager -------------------------------------------------
+    void managerRequiresAPort()
+    {
+        CommManager manager;
+        bool eventFired = false;
+        connect(&manager, &CommManager::eventLogged, [&](const QString &) { eventFired = true; });
+        SerialConfig empty;
+        QVERIFY(!manager.start(empty, empty));
+        QVERIFY(eventFired);
+        QCOMPARE(manager.running(), false);
+    }
+
+    void managerRejectsMonitorSends()
+    {
+        CommManager manager;
+        manager.setMode(CommManager::Monitor);
+        QCOMPARE(manager.send("x"), false);
+    }
+
+    // ---- serial over a pseudo terminal ----------------------------------------
+    void serialLoopbackThroughPty()
+    {
+        // A real end-to-end check: the link on the slave side receives what
+        // another process writes to the master, and what the link sends shows
+        // up on the master.
+        int master = posix_openpt(O_RDWR | O_NOCTTY);
+        QVERIFY(master >= 0);
+        QVERIFY(grantpt(master) == 0);
+        QVERIFY(unlockpt(master) == 0);
+        char slaveName[128];
+        QVERIFY(ptsname_r(master, slaveName, sizeof(slaveName)) == 0);
+
+        SerialLink link;
+        SerialConfig config;
+        config.device = slaveName;
+        QVERIFY(link.open(config));
+
+        // Inbound: master writes, the link's reader picks it up.
+        QByteArray received;
+        QEventLoop loop;
+        QTimer::singleShot(1000, &loop, &QEventLoop::quit);
+        connect(&link, &SerialLink::received, [&](const QByteArray &data) {
+            received += data;
+            if (received.contains("hello"))
+                loop.quit();
+        });
+        QCOMPARE(::write(master, "hello", 5), 5);
+        loop.exec();
+        QVERIFY(received.contains("hello"));
+
+        // Outbound: the link sends, the master reads it back.
+        QCOMPARE(link.write(QByteArray("bye")), 3);
+        char buffer[64];
+        QByteArray echoed;
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 500 && !echoed.contains("bye")) {
+            QCoreApplication::processEvents();
+            const ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0)
+                echoed.append(buffer, int(n));
+        }
+        QVERIFY(echoed.contains("bye"));
+        ::close(master);
+        link.close();
+    }
+
+    void serialRejectsUnknownBaud()
+    {
+        SerialLink link;
+        SerialConfig config;
+        config.device = "/dev/null";
+        config.baud = 1234567;
+        QVERIFY(!link.open(config));
+        QVERIFY(!link.lastError().isEmpty());
+    }
+
+    // ---- scripting -------------------------------------------------------------
+    void dlScriptRunsAndPrints()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        QStringList lines;
+        bool finishedOk = false;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::outputLine, [&](const QString &line, bool error) {
+            if (!error)
+                lines.append(line);
+        });
+        connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &) {
+            finishedOk = ok;
+            loop.quit();
+        });
+        runner.run("print(\"a\" + 1); print(\"done\");");
+        loop.exec();
+        QVERIFY(finishedOk);
+        const QStringList expected{QStringLiteral("a1"), QStringLiteral("done")};
+        QCOMPARE(lines, expected);
+    }
+
+    void dlScriptReportsErrorsAndLine()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        QString error;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &message) {
+            error = message;
+            Q_UNUSED(ok)
+            loop.quit();
+        });
+        runner.run("var x = ;");
+        loop.exec();
+        QVERIFY(!error.isEmpty());
+        // The error points at line 1 of the script.
+        QVERIFY(error.contains("line 1") || error.contains("SyntaxError"));
+    }
+
+    void dlScriptBlockingWaitAndStop()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        bool finished = false;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool, const QString &) {
+            finished = true;
+            loop.quit();
+        });
+        runner.run("DL.Wait(3000);");
+        // Wait a moment, then stop: the Wait must return early, not after 3 s.
+        QTest::qWait(150);
+        runner.stop();
+        loop.exec();
+        QVERIFY(finished);
+    }
+
+    void dlConversions()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        QString hexResult;
+        QString strResult;
+        int decResult = 0;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &) {
+            QVERIFY(ok);
+            loop.quit();
+        });
+        connect(&runner, &ScriptRunner::outputLine, [&](const QString &line, bool) {
+            if (line.startsWith("hex="))
+                hexResult = line.mid(4);
+            else if (line.startsWith("str="))
+                strResult = line.mid(4);
+            else if (line.startsWith("dec="))
+                decResult = line.mid(4).toInt();
+        });
+        runner.run("print(\"hex=\" + DL.StrToHex(\"AB\"));"
+                   "print(\"str=\" + DL.HexToStr(\"41 42\"));"
+                   "print(\"dec=\" + DL.HexToDec(\"FF\"));");
+        loop.exec();
+        QCOMPARE(hexResult, QString("41 42"));
+        QCOMPARE(strResult, QString("AB"));
+        QCOMPARE(decResult, 255);
+    }
+
+    void dlReceiveTimesOut()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        bool finished = false;
+        bool ok = true;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool success, const QString &) {
+            finished = true;
+            ok = success;
+            loop.quit();
+        });
+        const qint64 started = QDateTime::currentMSecsSinceEpoch();
+        runner.run("if (!DL.ReceiveStr(\"NEVER\", 300)) print(\"timed out ok\");");
+        loop.exec();
+        QVERIFY(finished);
+        QVERIFY(ok);  // the script handled the timeout itself
+        QVERIFY(QDateTime::currentMSecsSinceEpoch() - started < 2500);
+    }
+
+    void dlSendRequiresCommButParsesFirst()
+    {
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences);
+
+        QString errorText;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &error) {
+            errorText = error;
+            Q_UNUSED(ok)
+            loop.quit();
+        });
+        // Send returns false when communication is off; the script continues.
+        runner.run("var ok = DL.SendHex(\"48 65\"); print(ok);");
+        loop.exec();
+        QVERIFY(errorText.isEmpty());
+    }
+
+    // ---- project save / load round trip -----------------------------------------
+    void projectRoundTrip()
+    {
+        CommManager manager;
+        ChannelSettings a, b;
+        a.setDevice("/dev/ttyUSB0");
+        a.setBaud(9600);
+        a.setParity(2);
+        b.setDevice("/dev/ttyUSB1");
+        SequenceModel sequences;
+        sequences.add({{"name", "Boot"}, {"isSend", true}, {"format", 1}, {"data", "01 02 03"}, {"hotkey", 5}});
+        CommLog log;
+
+        const QJsonObject saved = Project::save(&manager, &a, &b, &sequences, "DL.Send(1);", &log);
+        QCOMPARE(saved.value("mode").toInt(), 0);
+        QCOMPARE(saved.value("channelA").toObject().value("device").toString(), QString("/dev/ttyUSB0"));
+
+        // Load into a fresh set of objects.
+        CommManager manager2;
+        ChannelSettings a2, b2;
+        SequenceModel sequences2;
+        CommLog log2;
+        QString script;
+        QVERIFY(Project::load(saved, &manager2, &a2, &b2, &sequences2, &script, &log2).isEmpty());
+        QCOMPARE(a2.device(), QString("/dev/ttyUSB0"));
+        QCOMPARE(a2.baud(), 9600);
+        QCOMPARE(a2.parity(), 2);
+        QCOMPARE(b2.device(), QString("/dev/ttyUSB1"));
+        QCOMPARE(sequences2.count(), 1);
+        QCOMPARE(sequences2.sequences().at(0).data, QString("01 02 03"));
+        QCOMPARE(sequences2.sequences().at(0).format, DataFormat::Format::Hex);
+        QCOMPARE(sequences2.sequences().at(0).hotkey, 5);
+        QCOMPARE(script, QString("DL.Send(1);"));
+    }
+
+    void projectRejectsForeignFiles()
+    {
+        CommManager manager;
+        ChannelSettings a, b;
+        SequenceModel sequences;
+        CommLog log;
+        QString script;
+        QVERIFY(!Project::load(QJsonObject(), &manager, &a, &b, &sequences, &script, &log).isEmpty());
+    }
+
+    // ---- log model -----------------------------------------------------------------
+    void logAppendsFormatsAndTrims()
+    {
+        CommLog log;
+        log.append(CommLog::Rx, 0, "abc");
+        log.append(CommLog::Tx, 0, QByteArray(1, 0x0D));
+        log.appendComment("note");
+        QCOMPARE(log.rowCount(), 3);
+        QCOMPARE(log.data(log.index(0, 0), CommLog::DirectionRole).toInt(), int(CommLog::Rx));
+        QCOMPARE(log.data(log.index(1, 0), CommLog::TextRole).toString(), QString(QChar(0xB7)));
+        QCOMPARE(log.data(log.index(2, 0), CommLog::CommentRole).toBool(), true);
+        log.clear();
+        QCOMPARE(log.rowCount(), 0);
+    }
+
+    void logSearchHighlights()
+    {
+        CommLog log;
+        log.append(CommLog::Rx, 0, "needle here");
+        log.append(CommLog::Rx, 0, "nothing");
+        log.setSearchText("NEEDLE");  // case-insensitive
+        QCOMPARE(log.data(log.index(0, 0), CommLog::SearchHitRole).toBool(), true);
+        QCOMPARE(log.data(log.index(1, 0), CommLog::SearchHitRole).toBool(), false);
+    }
+
+    void logFreezeBuffersArrivals()
+    {
+        CommLog log;
+        log.setFrozen(true);
+        log.append(CommLog::Rx, 0, "one");
+        log.append(CommLog::Rx, 0, "two");
+        QCOMPARE(log.rowCount(), 0);
+        log.setFrozen(false);
+        QCOMPARE(log.rowCount(), 2);
+    }
+
+    // ---- theme and language ----------------------------------------------------------
+    void themeFallsBack()
+    {
+        QTemporaryDir dir;
+        Theme theme(dir.path());
+        QCOMPARE(theme.accent(), QString("#FFD60A"));
+        QCOMPARE(theme.accentForeground(), QString("black"));
+        QCOMPARE(theme.bg(), QString("#1e1e2e"));
+    }
+
+    void themeReadsFullPalette()
+    {
+        QTemporaryDir dir;
+        QDir(dir.path()).mkpath("theme");
+        QFile colors(dir.path() + "/theme/colors.toml");
+        QVERIFY(colors.open(QIODevice::WriteOnly));
+        colors.write("accent = \"#112233\"\nred = \"#FF0000\"\nmode = \"dark\"\n");
+        colors.close();
+
+        Theme theme(dir.path());
+        QCOMPARE(theme.accent(), QString("#112233"));
+        QCOMPARE(theme.red(), QString("#FF0000"));
+        QCOMPARE(theme.accentForeground(), QString("white"));
+    }
+
+    void translatorFollowsTheLanguageFile()
+    {
+        QTemporaryDir dir;
+        write(dir.path() + "/language", "pt-BR\n");
+        write(dir.path() + "/pt.json", R"({"Save": "Guardar"})");
+        write(dir.path() + "/pt-BR.json", R"({"Save": "Salvar"})");
+
+        Translator translator(dir.path() + "/language", dir.path());
+        QCOMPARE(translator.language(), QString("pt-BR"));
+        QCOMPARE(translator.translate("Main", "Save"), QString("Salvar"));
+        QVERIFY(translator.translate("Main", "Quit").isNull());
+    }
+
+    void translatorPicksPluralForms()
+    {
+        QTemporaryDir dir;
+        write(dir.path() + "/language", "ru\n");
+        write(dir.path() + "/en.json",
+              R"JSON({"%n byte(s)": {"one": "%n byte", "other": "%n bytes"}})JSON");
+        write(dir.path() + "/ru.json",
+              R"JSON({"%n byte(s)": {"one": "%n байт", "few": "%n байта", "many": "%n байтов", "other": "%n байта"}})JSON");
+
+        Translator translator(dir.path() + "/language", dir.path());
+        QCOMPARE(translator.translate("Main", "%n byte(s)", nullptr, 1), QString("%n байт"));
+        QCOMPARE(translator.translate("Main", "%n byte(s)", nullptr, 3), QString("%n байта"));
+        QCOMPARE(translator.translate("Main", "%n byte(s)", nullptr, 5), QString("%n байтов"));
+    }
+
+private:
+    static void write(const QString &path, const QByteArray &contents)
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(contents);
+    }
+};
+
+QTEST_MAIN(LucidlightTests)
+#include "lucidlight_tests.moc"

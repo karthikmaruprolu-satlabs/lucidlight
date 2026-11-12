@@ -1,0 +1,73 @@
+#pragma once
+
+#include <QObject>
+#include <atomic>
+
+#include "seriallink.h"
+
+// Owns the two serial links and routes bytes according to the communication
+// mode, the way Docklight's mode selector does:
+//   0 Single   — port A only: send and receive on one line.
+//   1 Redirect — what Lucidlight sends goes out on port A; replies are
+//                received on port B (breakout-box wiring).
+//   2 Monitor  — both ports are read-only taps between two devices; data from
+//                port A is what device 1 sent, port B carries device 2's side.
+class CommManager : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(bool running READ running NOTIFY runningChanged)
+    Q_PROPERTY(int mode READ mode WRITE setMode NOTIFY modeChanged)
+    Q_PROPERTY(qint64 txBytes READ txBytes NOTIFY countersChanged)
+    Q_PROPERTY(qint64 rxBytes READ rxBytes NOTIFY countersChanged)
+
+public:
+    enum Mode { Single = 0, Redirect = 1, Monitor = 2 };
+    Q_ENUM(Mode)
+
+    explicit CommManager(QObject *parent = nullptr);
+    ~CommManager() override;
+
+    bool running() const { return m_running; }
+    int mode() const { return m_mode; }
+    void setMode(int mode);
+    qint64 txBytes() const { return m_txBytes; }
+    qint64 rxBytes() const { return m_rxBytes; }
+    void resetCounters();
+
+    // Starts both links as the mode requires. B's device may be empty in
+    // single mode.
+    bool start(const SerialConfig &a, const SerialConfig &b);
+    // Restarts with the configuration of the last start; scripts use this.
+    Q_INVOKABLE bool restart();
+    Q_INVOKABLE void stop();
+
+    // Sends out of the port the current mode transmits on.
+    Q_INVOKABLE bool send(const QByteArray &data);
+    // Direct writes for scripted pin-and-break games; bypasses mode routing.
+    Q_INVOKABLE bool sendOn(int channel, const QByteArray &data);
+    Q_INVOKABLE void sendBreak(int durationMs);
+    Q_INVOKABLE void setDTR(int channel, bool on);
+    Q_INVOKABLE void setRTS(int channel, bool on);
+
+    SerialLink *link(int channel) { return channel == 0 ? &m_a : &m_b; }
+
+signals:
+    void runningChanged();
+    void modeChanged();
+    void countersChanged();
+    // Data the devices sent; channel is 0 for A, 1 for B.
+    void incoming(int channel, const QByteArray &data);
+    // Data Lucidlight itself transmitted.
+    void transmitted(int channel, const QByteArray &data);
+    void eventLogged(const QString &text);
+
+private:
+    void handleIncoming(int channel, const QByteArray &data);
+
+    SerialLink m_a;
+    SerialLink m_b;
+    std::atomic_bool m_running {false};
+    int m_mode = Single;
+    qint64 m_txBytes = 0;
+    qint64 m_rxBytes = 0;
+    SerialConfig m_lastA, m_lastB;
+};

@@ -1,0 +1,190 @@
+#include "commlog.h"
+
+#include <QDateTime>
+
+namespace {
+QString clockString(qint64 ms) {
+    const QTime time = QTime::fromMSecsSinceStartOfDay(int(ms % (24 * 3600 * 1000)));
+    return time.toString("HH:mm:ss.zzz");
+}
+QString deltaString(qint64 deltaMs) {
+    return QString::number(deltaMs / 1000.0, 'f', 3) + "s";
+}
+}  // namespace
+
+CommLog::CommLog(QObject *parent) : QAbstractListModel(parent) {
+    m_startMs = QDateTime::currentMSecsSinceEpoch();
+}
+
+int CommLog::rowCount(const QModelIndex &parent) const {
+    return parent.isValid() ? 0 : m_rows.size();
+}
+
+QHash<int, QByteArray> CommLog::roleNames() const {
+    return {
+        {IndexRole, "entryIndex"},
+        {ClockRole, "clock"},
+        {DeltaRole, "delta"},
+        {DirectionRole, "direction"},
+        {ChannelRole, "channel"},
+        {TextRole, "text"},
+        {RawHexRole, "rawHex"},
+        {HighlightRole, "highlight"},
+        {CommentRole, "comment"},
+        {SearchHitRole, "searchHit"},
+    };
+}
+
+QVariant CommLog::data(const QModelIndex &index, int role) const {
+    if (!index.isValid() || index.row() >= m_rows.size())
+        return {};
+    const Row &row = m_rows.at(index.row());
+    switch (role) {
+    case IndexRole: return index.row() + m_trimmed + 1;
+    case ClockRole: return clockString(row.stampMs);
+    case DeltaRole: return deltaString(row.deltaMs);
+    case DirectionRole: return row.direction;
+    case ChannelRole: return row.channel;
+    case TextRole: return row.text;
+    case RawHexRole: return row.hex;
+    case HighlightRole: return row.highlighted;
+    case CommentRole: return row.direction == Comment || row.direction == Event;
+    case SearchHitRole: return !m_search.isEmpty() && row.text.contains(m_search, Qt::CaseInsensitive);
+    default: return {};
+    }
+}
+
+void CommLog::setFrozen(bool frozen) {
+    if (frozen == m_frozen)
+        return;
+    m_frozen = frozen;
+    emit frozenChanged();
+    // Unfreezing paints everything that arrived while the view was paused.
+    if (!frozen)
+        flushPending();
+}
+
+void CommLog::setShowTimestamps(bool on) {
+    if (on == m_showTimestamps)
+        return;
+    m_showTimestamps = on;
+    emit displayChanged();
+}
+
+void CommLog::setShowDelta(bool on) {
+    if (on == m_showDelta)
+        return;
+    m_showDelta = on;
+    emit displayChanged();
+}
+
+void CommLog::setDisplayFormat(DataFormat::Format format) {
+    if (format == m_format)
+        return;
+    m_format = format;
+    for (Row &row : m_rows)
+        if (row.direction != Comment && row.direction != Event)
+            row.text = DataFormat::display(row.data, m_format);
+    emit displayChanged();
+}
+
+void CommLog::setSearchText(const QString &text) {
+    if (text == m_search)
+        return;
+    m_search = text;
+    if (!m_rows.isEmpty())
+        emit dataChanged(index(0), index(m_rows.size() - 1), {SearchHitRole});
+}
+
+void CommLog::startClock() {
+    m_startMs = QDateTime::currentMSecsSinceEpoch();
+}
+
+void CommLog::flushPending() {
+    if (m_pending.isEmpty())
+        return;
+    const int first = m_rows.size();
+    beginInsertRows({}, first, first + m_pending.size() - 1);
+    for (Row &row : m_pending)
+        m_rows.append(std::move(row));
+    m_pending.clear();
+    endInsertRows();
+    emit countChanged();
+    trimIfNeeded();
+}
+
+void CommLog::append(Direction direction, int channel, const QByteArray &data, bool highlighted) {
+    Row row;
+    row.direction = direction;
+    row.channel = channel;
+    row.data = data;
+    row.stampMs = QDateTime::currentMSecsSinceEpoch();
+    row.deltaMs = row.stampMs - m_startMs;
+    row.text = direction == Comment || direction == Event ? QString::fromUtf8(data)
+                                                          : DataFormat::display(data, m_format);
+    row.hex = DataFormat::toHex(data);
+    row.highlighted = highlighted;
+    if (m_frozen) {
+        // Keep the view stable while frozen; buffered arrivals repaint at once
+        // when the view is released again.
+        m_pending.append(std::move(row));
+        if (m_pending.size() > 20000)
+            m_pending.remove(0, 10000);
+        return;
+    }
+    const int at = m_rows.size();
+    beginInsertRows({}, at, at);
+    m_rows.append(std::move(row));
+    endInsertRows();
+    emit countChanged();
+    trimIfNeeded();
+}
+
+void CommLog::appendComment(const QString &text) {
+    append(Comment, -1, text.toUtf8());
+}
+
+void CommLog::appendEvent(const QString &text) {
+    append(Event, -1, text.toUtf8());
+}
+
+void CommLog::clear() {
+    beginResetModel();
+    m_rows.clear();
+    m_pending.clear();
+    m_trimmed = 0;
+    m_nextIndex = 1;
+    endResetModel();
+    emit countChanged();
+}
+
+void CommLog::trimIfNeeded() {
+    // Keep the memory bounded; a long capture would otherwise grow forever.
+    static constexpr int limit = 5000;
+    static constexpr int drop = 1000;
+    if (m_rows.size() <= limit)
+        return;
+    beginRemoveRows({}, 0, drop - 1);
+    m_rows.remove(0, drop);
+    endRemoveRows();
+    m_trimmed += drop;
+    appendEvent(QObject::tr("--- %1 older entries trimmed ---").arg(drop));
+}
+
+QString CommLog::toText() const {
+    QString text;
+    for (const Row &row : m_rows) {
+        text.append(clockString(row.stampMs));
+        text.append(QLatin1Char('\t'));
+        switch (row.direction) {
+        case Rx: text.append(row.channel >= 0 ? QString("RX%1").arg(row.channel + 1) : "RX"); break;
+        case Tx: text.append(row.channel >= 0 ? QString("TX%1").arg(row.channel + 1) : "TX"); break;
+        case Comment: text.append("NOTE"); break;
+        case Event: text.append("INFO"); break;
+        }
+        text.append(QLatin1Char('\t'));
+        text.append(row.direction == Comment || row.direction == Event ? row.text : row.hex);
+        text.append(QLatin1Char('\n'));
+    }
+    return text;
+}

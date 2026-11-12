@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Lucidlight
+GenericName=Serial monitor and test scripting
+Comment=Serial terminal, monitor, and scripted testing in the spirit of Docklight
+Exec=lucidlight %f
+Icon=lucidlight
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=lucidlight
+Keywords=serial;rs232;com;port;terminal;monitor;script;

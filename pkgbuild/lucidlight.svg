@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#1e1e2e"/>
+  <!-- light beams -->
+  <path d="M32 22 L52 10 L54 16 L34 26 Z" fill="#89b4fa" opacity="0.55"/>
+  <path d="M32 22 L12 10 L10 16 L30 26 Z" fill="#89b4fa" opacity="0.85"/>
+  <!-- lamp -->
+  <circle cx="32" cy="23" r="5" fill="#89b4fa"/>
+  <!-- tower -->
+  <path d="M28 28 L25 50 L39 50 L36 28 Z" fill="#cdd6f4"/>
+  <rect x="24" y="50" width="16" height="4" rx="1.5" fill="#585b70"/>
+  <!-- stripes -->
+  <path d="M27.4 33 L36.6 33 L36 30 L28 30 Z" fill="#f38ba8"/>
+  <path d="M26.4 41 L37.6 41 L37.2 38 L26.8 38 Z" fill="#f38ba8"/>
+  <!-- rail -->
+  <rect x="26" y="27" width="12" height="1.6" rx="0.8" fill="#585b70"/>
+</svg>
