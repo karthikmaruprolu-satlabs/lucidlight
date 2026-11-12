@@ -1460,6 +1460,78 @@ private slots:
         ::close(master);
     }
 
+    void commentMacrosExpandOnMatch()
+    {
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        // The comment carries the %_S macro (matched data in the row's
+        // notation) and %_L (byte count).
+        backend.sequences()->add(QVariantMap{{"name", "Watch"}, {"isSend", false}, {"format", 0},
+                                             {"data", "PING"}, {"trigger", true},
+                                             {"comment", "got %_S len %_L"}});
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        QCOMPARE(::write(master, "PING", 4), 4);
+        QElapsedTimer timer;
+        timer.start();
+        QString logged;
+        while (timer.elapsed() < 1500) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            logged.clear();
+            for (int i = 0; i < backend.log()->count(); ++i) {
+                const QString text = backend.log()->textAt(i);
+                if (text.contains("got "))
+                    logged = text;
+            }
+            if (!logged.isEmpty())
+                break;
+        }
+        QVERIFY2(!logged.isEmpty(), "macro comment never logged");
+        QVERIFY(logged.contains("got PING len 4"));
+
+        backend.comm()->stop();
+        ::close(master);
+    }
+
+    void checksumAreaCalculatedOnSend()
+    {
+        // A send sequence with a checksum area appends the computed checksum
+        // bytes at the '@' position on every send.
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        // "AB" + 1 checksum byte, MOD256 over bytes 1..2 (0x41+0x42 = 0x83).
+        backend.sequences()->add(QVariantMap{
+            {"name", "Framed"}, {"isSend", true}, {"format", 1},
+            {"data", "41 42 00"}, {"checksumSpec", "(1,2) MOD256"}});
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+        backend.sendSequence(backend.sequences()->count() - 1);
+
+        QByteArray got;
+        char buffer[64];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1500 && !got.contains('\x83')) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            const ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0)
+                got.append(buffer, int(n));
+        }
+        QVERIFY(got.contains('\x83'));
+
+        backend.comm()->stop();
+        ::close(master);
+    }
+
     void sequenceRepeatSendsPeriodically()
     {
         char slave[128];

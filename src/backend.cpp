@@ -190,7 +190,7 @@ QString Backend::expandCommentMacros(const QString &text, const Sequence *seq,
         }
         const int bodyEnd = hasRange
                                 ? text.indexOf(QLatin1Char(')'), after) + 1
-                                : after + 1;
+                                : after;
         QString replacement;
         const auto dataText = [&](DataFormat::Format format) {
             QByteArray slice = received;
@@ -209,8 +209,8 @@ QString Backend::expandCommentMacros(const QString &text, const Sequence *seq,
             return DataFormat::display(slice, format);
         };
         switch (code.unicode()) {
-        case 'S': replacement = "\a"; break;                  // bell (text form)
-        case 'L': replacement = "\n"; break;
+        case 'S': replacement = dataText(seq->format); break;   // data in sequence notation
+        case 'L': replacement = QString::number(received.size()); break;
         case 'T': replacement = QLocale().toString(QDateTime::currentDateTime(),
                                                     QStringLiteral("HH:mm:ss.zzz"));
             break;
@@ -387,7 +387,15 @@ void Backend::sendSequence(int row) {
         emit parameterRequest(row, minLengths);
         return;
     }
-    transmitElements(parsed.elements);
+    // The no-parameter path goes through the same builder so checksum areas
+    // are applied, like Docklight computing the checksum on every send.
+    QVector<ParsedBytes::Element> elements;
+    QString error;
+    if (!buildSendElements(*seq, QStringList(), DataFormat::Format::Text, &elements, &error)) {
+        emit toast(tr("%1: %2").arg(seq->name, error));
+        return;
+    }
+    transmitElements(elements);
     armRepeat(seq);
 }
 
