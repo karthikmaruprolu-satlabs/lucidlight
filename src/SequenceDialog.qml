@@ -9,7 +9,8 @@ Popup {
 
     property int editRow: -1
 
-    width: 440
+    width: 460
+    height: implicitContentHeight + 16
     modal: true
     closePolicy: Popup.CloseOnEscape
     anchors.centerIn: parent
@@ -28,6 +29,12 @@ Popup {
         hotkeyBox.currentIndex = 0;
         repeatField.text = "0";
         replyBox.currentIndex = -1;
+        docField.text = "";
+        commentField.text = "";
+        triggerBox.checked = false;
+        stopBox.checked = false;
+        checksumField.text = "";
+        checksumModeBox.currentIndex = 0;
         open();
         nameField.selectAll();
         nameField.forceActiveFocus();
@@ -48,6 +55,12 @@ Popup {
         for (let i = 0; i < replyBox.count; ++i)
             if (replyBox.valueAt(i) === seq.replyToId)
                 replyBox.currentIndex = i;
+        docField.text = seq.comment;
+        commentField.text = seq.comment;
+        triggerBox.checked = seq.trigger;
+        stopBox.checked = seq.stopRun;
+        checksumField.text = seq.checksumSpec;
+        checksumModeBox.currentIndex = seq.checksumMode;
         open();
         nameField.forceActiveFocus();
     }
@@ -60,7 +73,12 @@ Popup {
             data: dataArea.text,
             hotkey: kindBox.currentIndex === 0 ? hotkeyBox.currentIndex : 0,
             repeatIntervalMs: kindBox.currentIndex === 0 ? parseInt(repeatField.text, 10) || 0 : 0,
-            replyToId: kindBox.currentIndex === 1 && replyBox.currentIndex >= 0 ? replyBox.currentValue : -1
+            replyToId: kindBox.currentIndex === 1 && replyBox.currentIndex >= 0 ? replyBox.currentValue : -1,
+            comment: kindBox.currentIndex === 0 ? docField.text : commentField.text,
+            trigger: kindBox.currentIndex === 1 && triggerBox.checked,
+            stopRun: kindBox.currentIndex === 1 && stopBox.checked,
+            checksumSpec: checksumField.text.trimmed(),
+            checksumMode: checksumModeBox.currentIndex
         };
         if (editRow >= 0)
             backend.sequences.update(editRow, fields);
@@ -161,10 +179,22 @@ Popup {
             visible: text !== ""
         }
 
-        RowLayout {
+        TextField {
+            id: docField
+            visible: kindBox.currentIndex === 0
+            Layout.fillWidth: true
+            placeholderText: qsTr("Documentation shown next to the sequence")
+            font.pixelSize: 12
+            text: ""
+        }
+
+        // Receive sequence actions, like Docklight's Action column.
+        GridLayout {
             visible: kindBox.currentIndex === 1
             Layout.fillWidth: true
-            spacing: 8
+            columns: 2
+            columnSpacing: 8
+            rowSpacing: 6
             Label {
                 text: qsTr("On match, send")
                 color: theme.muted
@@ -186,6 +216,82 @@ Popup {
                     }
                     return entries;
                 }
+            }
+            CheckBox {
+                id: triggerBox
+                text: qsTr("Trigger (snapshot)")
+                font.pixelSize: 12
+                contentItem: Label {
+                    text: triggerBox.text
+                    font.pixelSize: 12
+                    color: theme.muted
+                    leftPadding: triggerBox.indicator.width + triggerBox.spacing
+                    verticalAlignment: Text.AlignVCenter
+                }
+                ToolTip.visible: triggerBox.hovered
+                ToolTip.text: qsTr("Log the match in the communication window")
+                ToolTip.delay: 500
+            }
+            CheckBox {
+                id: stopBox
+                text: qsTr("Stop run")
+                font.pixelSize: 12
+                contentItem: Label {
+                    text: stopBox.text
+                    font.pixelSize: 12
+                    color: theme.muted
+                    leftPadding: stopBox.indicator.width + stopBox.spacing
+                    verticalAlignment: Text.AlignVCenter
+                }
+                ToolTip.visible: stopBox.hovered
+                ToolTip.text: qsTr("Stop communication when this sequence matches")
+                ToolTip.delay: 500
+            }
+            Label {
+                text: qsTr("Comment line")
+                color: theme.muted
+                font.pixelSize: 12
+            }
+            TextField {
+                id: commentField
+                Layout.fillWidth: true
+                placeholderText: qsTr("%_S data · %_L length · %_T time · %_C channel …")
+                font.pixelSize: 12
+                font.family: win.monoFont
+                ToolTip.visible: commentField.hovered
+                ToolTip.text: qsTr("Comment written to the window on a match; %_ macros expand to the match details")
+                ToolTip.delay: 500
+            }
+        }
+
+        // Docklight's checksum specification for this sequence.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            Label {
+                text: qsTr("Checksum")
+                color: theme.muted
+                font.pixelSize: 12
+            }
+            TextField {
+                id: checksumField
+                Layout.fillWidth: true
+                placeholderText: qsTr("MOD256 · CRC-16 · (1,2) MOD256 · CRC:8,07,00,00,F,F")
+                font.pixelSize: 12
+                font.family: win.monoFont
+                ToolTip.visible: checksumField.hovered
+                ToolTip.text: qsTr("Checksum specification: optional (start,len) area, an algorithm name, and A/L endianness")
+                ToolTip.delay: 500
+            }
+            ComboBox {
+                id: checksumModeBox
+                Layout.preferredWidth: 120
+                font.pixelSize: 12
+                model: [qsTr("(none)"), qsTr("valid"), qsTr("invalid"), qsTr("both")]
+                enabled: kindBox.currentIndex === 1
+                ToolTip.visible: checksumModeBox.hovered
+                ToolTip.text: qsTr("For receive sequences: match when the checksum is valid, invalid, or either")
+                ToolTip.delay: 500
             }
         }
 

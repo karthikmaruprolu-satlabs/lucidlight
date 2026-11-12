@@ -99,9 +99,11 @@ Rectangle {
                         spacing: 0
                         Label {
                             Layout.fillWidth: true
-                            text: name
+                            // Docklight shows the 0-based sequence index.
+                            text: "<span style=\"color:" + Qt.rgba(theme.muted.r, theme.muted.g, theme.muted.b, 0.7) + "\">[" + index + "]</span>  " + name
                             color: seqEnabled ? theme.bright : theme.muted
                             font.pixelSize: 12
+                            textFormat: Text.RichText
                             elide: Text.ElideRight
                         }
                         Label {
