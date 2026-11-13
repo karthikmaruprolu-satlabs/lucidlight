@@ -61,10 +61,17 @@ Rectangle {
                 required property string name
                 required property bool isSend
                 required property string preview
+                required property string comment
                 required property int hotkey
                 required property bool seqEnabled
                 width: list.width
                 height: 44
+                // Docklight shows the sequence documentation next to the
+                // sequence in the list.
+                ToolTip.visible: rowMouse.containsMouse
+                                 && (comment !== "" || preview !== "")
+                ToolTip.delay: 600
+                ToolTip.text: (comment !== "" ? comment + "\n" : "") + preview
 
                 Rectangle {
                     anchors.fill: parent
@@ -108,10 +115,16 @@ Rectangle {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: preview
-                            color: Qt.alpha(theme.muted, 0.8)
+                            // The documentation (comment) replaces the data
+                            // preview when the user wrote one, like the
+                            // Documentation column in Docklight.
+                            text: comment !== "" ? comment : preview
+                            color: comment !== ""
+                                       ? Qt.rgba(theme.muted.r, theme.muted.g, theme.muted.b, 0.9)
+                                       : Qt.alpha(theme.muted, 0.8)
                             font.pixelSize: 10
                             font.family: win.monoFont
+                            font.italic: comment !== ""
                             elide: Text.ElideMiddle
                         }
                     }

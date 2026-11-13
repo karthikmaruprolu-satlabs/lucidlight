@@ -15,5 +15,5 @@ SOURCES += grab_harness.cpp \
     ../src/seriallink.cpp ../src/commlink.cpp ../src/netlink.cpp ../src/portenumerator.cpp ../src/dataformat.cpp ../src/checksum.cpp ../src/filelogger.cpp \
     ../src/commlog.cpp ../src/commmanager.cpp ../src/channelsettings.cpp \
     ../src/sequencemodel.cpp ../src/sequencematcher.cpp \
-    ../src/dlscript.cpp ../src/jshighlighter.cpp ../src/project.cpp ../src/portalpicker.cpp
+    ../src/dlscript.cpp ../src/vbstrans.cpp ../src/jshighlighter.cpp ../src/project.cpp ../src/portalpicker.cpp
 RESOURCES += ../src/resources.qrc
