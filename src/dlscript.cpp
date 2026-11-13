@@ -71,6 +71,12 @@ void DLScriptEngine::onStop() {
 void DLScriptEngine::onReceiveEvent(int id, int index, const QString &name,
                                     const QByteArray &bytes, int channel,
                                     qint64 timestampMs) {
+    queueReceiveEvent(id, index, name, bytes, channel, timestampMs);
+}
+
+void DLScriptEngine::queueReceiveEvent(int id, int index, const QString &name,
+                                       const QByteArray &bytes, int channel,
+                                       qint64 timestampMs) {
     ReceiveEvent event;
     event.id = id;
     event.index = index;
@@ -78,7 +84,10 @@ void DLScriptEngine::onReceiveEvent(int id, int index, const QString &name,
     event.bytes = bytes;
     event.channel = channel;
     event.timestampMs = timestampMs;
-    m_receiveQueue.append(event);
+    {
+        QMutexLocker lock(&m_queueMutex);
+        m_receiveQueue.append(event);
+    }
     emit incomingWakeup();
 }
 
@@ -90,8 +99,16 @@ void DLScriptEngine::onSendRequestDone() {
 // Runs the queued DL_OnReceive() events. Called from park slices, so the JS
 // virtual machine is free (the main script is waiting inside a DL call).
 void DLScriptEngine::processReceiveEvents() {
-    while (!m_receiveQueue.isEmpty() && !m_stop) {
-        m_onReceive = m_receiveQueue.takeFirst();
+    QVector<ReceiveEvent> pending;
+    {
+        QMutexLocker lock(&m_queueMutex);
+        pending = m_receiveQueue;
+        m_receiveQueue.clear();
+    }
+    for (const ReceiveEvent &event : pending) {
+        if (m_stop)
+            break;
+        m_onReceive = event;
         const QJSValue handler = m_engine->globalObject().property("DL_OnReceive");
         if (handler.isCallable()) {
             QJSValue result = handler.call();

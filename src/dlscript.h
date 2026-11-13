@@ -67,6 +67,11 @@ public slots:
     // Queued from Backend::handleTrigger while a script is running.
     void onReceiveEvent(int id, int index, const QString &name,
                         const QByteArray &bytes, int channel, qint64 timestampMs);
+    // Thread-safe direct handoff: called from the comm path so a detected
+    // receive event is in the queue immediately (no event-loop delivery race).
+    void queueReceiveEvent(int id, int index, const QString &name,
+                           const QByteArray &bytes, int channel,
+                           qint64 timestampMs);
     // Posted back after Backend handled a DL.SendSequence request.
     void onSendRequestDone();
     // Called synchronously from the main thread before a script-generated
@@ -123,6 +128,7 @@ private:
     QString m_lastError;
 
     QVector<ReceiveEvent> m_receiveQueue;
+    QMutex m_queueMutex;
     ReceiveEvent m_onReceive;         // context for DL.OnReceive_*
     bool m_onSendActive = false;      // context for DL.OnSend_*
     QString m_onSendName;

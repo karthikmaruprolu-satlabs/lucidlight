@@ -2028,6 +2028,43 @@ private slots:
         QCOMPARE(seen.mid(0, 2), QByteArray("\x01\x04", 2));
     }
 
+    void receiveChecksumWithWildcardsMatches()
+    {
+        // Modbus-style: data with wildcard bytes plus a checksum area over
+        // (1,7) with the "L" little-endian modifier, exactly like the
+        // manual's Modbus RTU example.
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        backend.sequences()->add(QVariantMap{
+            {"name", "Resp"}, {"isSend", false}, {"format", 1},
+            {"data", "01 03 04 ?? ?? ?? ?? ?? ??"}, {"checksumSpec", "(1,7) CRC-MODBUS L"},
+            {"comment", "HIT %_S"}});
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+                QByteArray response("\x01\x03\x04\x00\x01\x02\x03\xEA\x92", 9);
+        QCOMPARE(::write(master, response.constData(), response.size()),
+                 qint64(response.size()));
+        QStringList rows;
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1500 && rows.isEmpty()) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 30);
+            for (const auto &row : backend.log()->rows())
+                if (row.direction == CommLog::Comment
+                    && row.text.startsWith("HIT 01 03 04"))
+                    rows.append(row.text);
+        }
+        QVERIFY(!rows.isEmpty());
+
+        backend.comm()->stop();
+        ::close(master);
+    }
+
     void receiveSequenceChecksumValidation()
     {
         // Receive sequences validate checksums per the manual: mode 0 = only

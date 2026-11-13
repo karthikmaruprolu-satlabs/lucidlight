@@ -196,13 +196,13 @@ void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token
         // Docklight counts every detection since start/reset.
         m_receiveCounts[sequenceId]++;
         // The running script gets the match queued as a DL_OnReceive event.
+        // Direct thread-safe handoff: the event is in the queue right now, so
+        // a drain right after a blocking call cannot miss it.
         DLScriptEngine *engine = m_runner ? m_runner->engine() : nullptr;
         if (engine) {
-            QMetaObject::invokeMethod(engine, "onReceiveEvent", Qt::QueuedConnection,
-                                      Q_ARG(int, seq.id), Q_ARG(int, i),
-                                      Q_ARG(QString, seq.name), Q_ARG(QByteArray, received),
-                                      Q_ARG(int, channel + 1),
-                                      Q_ARG(qint64, QDateTime::currentMSecsSinceEpoch()));
+            engine->queueReceiveEvent(seq.id, i, seq.name, received,
+                                      channel + 1,
+                                      QDateTime::currentMSecsSinceEpoch());
         }
         applyTrigger(&seq, received, channel);
         break;

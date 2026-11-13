@@ -134,11 +134,17 @@ QString Project::displayFormatName(DataFormat::Format format) {
 }
 
 DataFormat::Format Project::displayFormatFromName(const QString &name) {
-    if (name == QLatin1String("hex"))
+    // Tolerant matching: "hex", "HEX", "Hex" and the Docklight
+    // representation letters H/D/B/A all work.
+    const QString n = name.trimmed().toLower();
+    if (n == QLatin1String("hex") || n == QLatin1String("h"))
         return DataFormat::Format::Hex;
-    if (name == QLatin1String("dec"))
+    if (n == QLatin1String("dec") || n == QLatin1String("d"))
         return DataFormat::Format::Dec;
-    if (name == QLatin1String("bin") || name == QLatin1String("binary"))
+    if (n == QLatin1String("bin") || n == QLatin1String("binary")
+        || n == QLatin1String("b"))
         return DataFormat::Format::Bin;
+    if (n == QLatin1String("ascii") || n == QLatin1String("a"))
+        return DataFormat::Format::Text;
     return DataFormat::Format::Text;
 }
