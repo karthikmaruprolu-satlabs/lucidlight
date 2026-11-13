@@ -1530,6 +1530,15 @@ private slots:
                  QByteArray("\xFF\x00\x41", 3) + char(0xFF) + "B");
         // Plain data passes through untouched.
         QCOMPARE(SerialLink::decodeParity("PING", int('?')), QByteArray("PING"));
+
+        // The FF 00 00 triplet marks a BREAK condition: it fires the break
+        // event instead of delivering a data byte.
+        bool sawBreak = false;
+        const char breakTriplet[] = {'\xFF', '\x00', '\x00'};
+        QCOMPARE(SerialLink::decodeParity(QByteArray(breakTriplet, 3), int('?'),
+                                          nullptr, &sawBreak),
+                 QByteArray());
+        QVERIFY(sawBreak);
     }
 
     void parityErrorCharPassesDataThrough()

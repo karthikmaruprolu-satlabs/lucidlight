@@ -28,6 +28,12 @@ Backend::Backend(QObject *parent)
       m_ports(new PortEnumerator(this)),
       m_picker(new PortalPicker(this)) {
     connect(m_comm, &CommManager::incoming, this, &Backend::handleIncoming);
+    connect(m_comm, &CommManager::breakReceived, this,
+            [this](int channel) {
+        // Docklight: breaks never appear in the data stream, but a receive
+        // sequence containing the '%' function character detects them.
+        m_matchers[channel].feedBreak(QDateTime::currentMSecsSinceEpoch());
+    });
     // DL.SendSequence requests from the script engine arrive queued; the
     // engine parks until scriptSendSequenceDone() flows back.
     connect(m_runner, &ScriptRunner::sendRequest, this, &Backend::scriptSendSequence,

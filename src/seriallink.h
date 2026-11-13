@@ -46,8 +46,11 @@ public:
     // Decodes PARMRK escapes: "\377 \0 X" is a byte received with a parity
     // error and becomes the ParityErrorChar; "\377 \377" is a real 0xFF
     // data byte. Public so tests can exercise it without hardware.
+    // The \377 \0 \0 triplet marks a BREAK condition: sawBreak is set
+    // and the triplet is not delivered as data.
     static QByteArray decodeParity(const QByteArray &raw, int parityErrorChar,
-                                   QByteArray *tail = nullptr);
+                                   QByteArray *tail = nullptr,
+                                   bool *sawBreak = nullptr);
 
 private:
     void readReady();
@@ -60,8 +63,13 @@ private:
     int m_parity = 0;
     int m_parityErrorChar = int('?');
     bool m_decodeParity = false;   // PARMRK decoding active (parity + error char)
+    bool m_detectBreak = true;     // PARMRK stays on for BREAK detection
     QByteArray m_parityTail;       // incomplete PARMRK escape carried across reads
     termios m_savedTermios {};
     bool m_savedValid = false;
     QSocketNotifier *m_notifier = nullptr;
+
+Q_SIGNALS:
+    // A break condition was detected on the line (the PARMRK marker).
+    void breakReceived();
 };

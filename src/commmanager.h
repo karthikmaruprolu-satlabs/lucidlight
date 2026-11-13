@@ -76,6 +76,8 @@ signals:
     void countersChanged();
     // Data the devices sent; channel is 0 for A, 1 for B.
     void incoming(int channel, const QByteArray &data);
+    // A break condition was detected on the given channel (0 = A, 1 = B).
+    void breakReceived(int channel);
     // Data Lucidlight itself transmitted.
     void transmitted(int channel, const QByteArray &data);
     void eventLogged(const QString &text);

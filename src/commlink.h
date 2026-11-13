@@ -62,6 +62,8 @@ public:
     static CommLink *create(const QString &device, QObject *parent);
 
 signals:
+    // A break condition was detected on the line.
+    void breakReceived();
     void received(const QByteArray &data);
     void stateChanged();
 };

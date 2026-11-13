@@ -14,6 +14,9 @@ CommManager::~CommManager() {
 void CommManager::attach(CommLink *link, int channel) {
     connect(link, &CommLink::received, this,
             [this, channel](const QByteArray &data) { handleIncoming(channel, data); });
+    connect(link, &CommLink::breakReceived, this, [this, channel] {
+        emit breakReceived(channel);
+    });
     connect(link, &CommLink::stateChanged, this, [this, link, channel] {
         if (link->isOpen())
             emit eventLogged(QObject::tr("Port %1 opened").arg(link->device()));
