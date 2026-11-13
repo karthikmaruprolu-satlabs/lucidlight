@@ -1112,6 +1112,8 @@ QString Backend::scriptCommWindowData(const QString &representation) {
 bool Backend::scriptStartLogging(const QString &path, bool appendData,
                                  const QString &representations, int format,
                                  bool noHeaders) {
+    // Log files follow the communication window's timing display.
+    m_logger.setMicroStamps(m_log->microStamps());
     return m_logger.start(path, appendData, representations, format, noHeaders);
 }
 
@@ -1294,6 +1296,12 @@ QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {
     }
     if (name == "scriptGetHtmlStyle")
         return scriptGetHtmlStyle();
+    if (name == "scriptSetMicroStamps") {
+        scriptSetMicroStamps(arg(0).toBool());
+        return {};
+    }
+    if (name == "scriptGetMicroStamps")
+        return scriptGetMicroStamps();
     if (name == "scriptSetContentsFilter") {
         scriptSetContentsFilter(arg(0).toInt());
         return {};

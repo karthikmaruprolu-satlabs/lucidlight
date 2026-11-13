@@ -28,6 +28,9 @@ public:
     // Docklight "Customize HTML output": the CSS style applied to the <pre>
     // block of .htm log files. Empty resets to the built-in default.
     void setHtmlStyle(const QString &css) { m_htmlStyle = css; }
+    // Seconds-only stamps with 6 decimals (us) in the log files, matching
+    // the comm window's microsecond mode. Default: Docklight date stamps.
+    void setMicroStamps(bool on) { m_microStamps = on; }
     QString htmlStyle() const { return m_htmlStyle; }
     // Saves a single snapshot file (.htm/.rtf/.txt) replaying buffered rows,
     // for the GUI "Save communication log" command. representation is one of
@@ -45,6 +48,7 @@ private:
         QFile *file = nullptr;
         QTextStream *stream = nullptr;
         QString representation;   // "A", "H", "D" or "B"
+        qint64 stampUs = -1;      // fixed us offset (snapshot replay); -1 = live clock
     };
     void writeHeader(File &f, const QString &representation);
     void writeRow(File &f, const QString &representation, int direction, int channel,
@@ -61,4 +65,6 @@ private:
     int m_format = 0;   // 0 txt, 1 htm, 2 rtf
     bool m_active = false;
     QString m_htmlStyle;
+    bool m_microStamps = false;
+    qint64 m_startUs = 0;
 };

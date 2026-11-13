@@ -139,6 +139,13 @@ public:
     Q_INVOKABLE void scriptSetHtmlStyle(const QString &css) {
         m_logger.setHtmlStyle(css);
     }
+    Q_INVOKABLE void scriptSetMicroStamps(bool on) {
+        m_log->setMicroStamps(on);
+        m_logger.setMicroStamps(on);
+    }
+    Q_INVOKABLE bool scriptGetMicroStamps() const {
+        return m_log->microStamps();
+    }
     Q_INVOKABLE QString scriptGetHtmlStyle() const {
         return m_logger.htmlStyle();
     }

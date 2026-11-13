@@ -1262,6 +1262,14 @@ void DLObject::SaveProgramOptions(const QString &filePathName) {
     m_host->callBridge("scriptSaveOptions", {path});
 }
 
+void DLObject::SetMicroStamps(bool on) {
+    m_host->callBridge("scriptSetMicroStamps", QVariantList{on});
+}
+
+bool DLObject::GetMicroStamps() const {
+    return m_host->callBridge("scriptGetMicroStamps", QVariantList{}).toBool();
+}
+
 void DLObject::SetHtmlStyle(const QString &css) {
     m_host->callBridge("scriptSetHtmlStyle", QVariantList{css});
 }

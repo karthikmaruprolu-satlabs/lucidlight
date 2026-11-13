@@ -1996,6 +1996,92 @@ private slots:
 
 
 
+
+
+    void microsecondLogFiles()
+    {
+        // With microsecond timing enabled, log files carry seconds-only
+        // stamps with 6 decimals; the classic date stamp otherwise.
+        QTemporaryDir dir;
+        FileLogger logger;
+        logger.setMicroStamps(true);
+        const qint64 base = QDateTime::currentMSecsSinceEpoch();
+        // Replayed rows: fixed us offsets keep the snapshot deterministic.
+        QVector<CommLog::Row> rows;
+        CommLog::Row a;
+        a.direction = CommLog::Tx;
+        a.channel = 0;
+        a.data = "PING";
+        a.text = "PING";
+        a.stampMs = base;
+        a.stampUs = 1000000;
+        rows.append(a);
+        CommLog::Row b;
+        b.direction = CommLog::Rx;
+        b.channel = 0;
+        b.data = "ACK";
+        b.text = "ACK";
+        b.stampMs = base + 1;
+        b.stampUs = 1001234;
+        rows.append(b);
+        QVERIFY(logger.writeSnapshot(rows, dir.path() + "/us.txt", 0, QLatin1Char('A')));
+        QFile f(dir.path() + "/us.txt");
+        QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString text = QString::fromUtf8(f.readAll());
+        // Snapshot stamps are relative to the first window row.
+        QVERIFY(text.contains("0.000000 [TX1] - PING"));
+        QVERIFY(text.contains("0.001234 [RX1] - ACK"));
+        // Micro mode off: the Docklight-style date stamp is back.
+        FileLogger plain;
+        QVERIFY(plain.writeSnapshot(rows, dir.path() + "/plain.txt", 0, QLatin1Char('A')));
+        QFile f2(dir.path() + "/plain.txt");
+        QVERIFY(f2.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString plainText = QString::fromUtf8(f2.readAll());
+        QVERIFY(plainText.contains("PING"));
+        QVERIFY(!plainText.contains(QRegularExpression(
+            "\\d\\.\\d{6} \\[TX")));
+    }
+
+    void microsecondTimingDisplay()
+    {
+        // Microsecond mode: every time value is seconds-only with 6-decimal
+        // (us) precision; deltas are measured with CLOCK_REALTIME us.
+        Backend backend;
+        backend.log()->setMicroStamps(true);
+        backend.log()->append(CommLog::Rx, 0, QByteArray("A"), false);
+        QThread::msleep(2);
+        backend.log()->append(CommLog::Tx, 0, QByteArray("B"), false);
+        const auto rows = backend.log()->rows();
+        QCOMPARE(rows.size(), 2);
+        static const QRegularExpression secondsRe("^\\d+\\.\\d{6}s$");
+        const QString clock0 = backend.log()->data(backend.log()->index(0, 0),
+                                                  CommLog::ClockRole).toString();
+        const QString clock1 = backend.log()->data(backend.log()->index(1, 0),
+                                                  CommLog::ClockRole).toString();
+        QVERIFY(secondsRe.match(clock0).hasMatch());
+        QVERIFY(secondsRe.match(clock1).hasMatch());
+        // The second row's absolute time is later (us precision holds).
+        QVERIFY(backend.log()->data(backend.log()->index(1, 0),
+                                    CommLog::ClockRole).toString()
+                >= clock0);
+        const QString delta1 = backend.log()->data(backend.log()->index(1, 0),
+                                                   CommLog::DeltaRole).toString();
+        QVERIFY(secondsRe.match(delta1).hasMatch());
+        // 2 ms sleep: the delta must be within [1ms, 500ms] -> "0.00x...s"
+        const double d = delta1.chopped(1).toDouble();
+        QVERIFY2(d > 0.0005 && d < 0.5, qPrintable(delta1));
+        // Raw us values are monotonic and the delta matches the display.
+        QVERIFY(rows.at(1).stampUs >= rows.at(0).stampUs);
+        QCOMPARE(double(rows.at(1).deltaUs) / 1e6, d);
+        // Text export uses the same seconds-only format.
+        QVERIFY(backend.log()->toText().contains("RX"));
+        // Off state: classic HH:mm:ss.zzz clock returns.
+        backend.log()->setMicroStamps(false);
+        static const QRegularExpression hhmmssRe("^\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d$");
+        QVERIFY(hhmmssRe.match(backend.log()->data(backend.log()->index(0, 0),
+                                                   CommLog::ClockRole).toString()).hasMatch());
+    }
+
     void saveLogSupportsHtmlAndRtf()
     {
         // Docklight's Save Communication Window accepts .txt, .htm and .rtf.

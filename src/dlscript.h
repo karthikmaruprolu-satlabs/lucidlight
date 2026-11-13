@@ -293,6 +293,9 @@ public:
     // Lucidlight extension: CSS style for .htm log files ("Customize HTML
     // output" in Docklight). Empty string resets the built-in default.
     Q_INVOKABLE void SetHtmlStyle(const QString &css);
+    // Lucidlight extension: seconds-only microsecond timing display.
+    Q_INVOKABLE void SetMicroStamps(bool on);
+    Q_INVOKABLE bool GetMicroStamps() const;
     Q_INVOKABLE QString GetHtmlStyle() const;
     Q_INVOKABLE bool StartLogging(const QString &baseFilePath, bool appendData = true,
                                   const QString &representations = QStringLiteral("AHDB"),

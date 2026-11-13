@@ -17,6 +17,8 @@ class CommLog : public QAbstractListModel {
     Q_PROPERTY(bool frozen READ frozen WRITE setFrozen NOTIFY frozenChanged)
     Q_PROPERTY(bool showTimestamps READ showTimestamps WRITE setShowTimestamps NOTIFY displayChanged)
     Q_PROPERTY(bool showDelta READ showDelta WRITE setShowDelta NOTIFY displayChanged)
+    // Microsecond timestamp precision: stamps show HH:mm:ss.zzzzzz.
+    Q_PROPERTY(bool microStamps READ microStamps WRITE setMicroStamps NOTIFY displayChanged)
     // Docklight contents filter: 0 all, 1 channel 1, 2 channel 2, 3 comments only.
     Q_PROPERTY(int channelFilter READ channelFilter WRITE setChannelFilter NOTIFY filterChanged)
     // Docklight's "control characters" view option for the ASCII view.
@@ -55,6 +57,8 @@ public:
     bool frozen() const { return m_frozen; }
     bool showTimestamps() const { return m_showTimestamps; }
     bool showDelta() const { return m_showDelta; }
+    bool microStamps() const { return m_microStamps; }
+    void setMicroStamps(bool on);
     DataFormat::Format displayFormat() const { return m_format; }
 
     void setFrozen(bool frozen);
@@ -117,6 +121,8 @@ public:
         Direction direction = Rx;
         int channel = -1;
         qint64 stampMs = 0;
+        qint64 stampUs = 0;   // microseconds since epoch (CLOCK_REALTIME)
+        qint64 deltaUs = 0;   // us since the previous row
         qint64 deltaMs = 0;
         QByteArray data;
         QString text;
@@ -150,6 +156,8 @@ private:
     void rerender();
     bool m_showTimestamps = true;
     bool m_showDelta = false;
+    bool m_microStamps = false;
+    qint64 m_startUs = 0;
     DataFormat::Format m_format = DataFormat::Format::Text;
     QString m_search;
     QVector<Row> m_pending;

@@ -309,6 +309,18 @@ ApplicationWindow {
                 ToolTip.text: qsTr("Timestamps")
                 ToolTip.delay: 600
             }
+            // Microsecond precision: seconds-only stamps with 6 decimals.
+            ToolButton {
+                id: microButton
+                checkable: true
+                checked: backend.log.microStamps
+                text: "\u00B5s"
+                font.pixelSize: 12
+                onClicked: backend.log.microStamps = checked
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Microsecond precision — all times as seconds with 6 decimals (\u03BCs resolution)")
+                ToolTip.delay: 600
+            }
             // Docklight's "additional date/time stamp": a full stamp into
             // the communication window every N seconds, 0 = off.
             ToolButton {

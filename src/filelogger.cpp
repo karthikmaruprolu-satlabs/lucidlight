@@ -4,6 +4,16 @@
 #include <QDir>
 #include <QFile>
 #include <QTextStream>
+static qint64 nowUs() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return qint64(ts.tv_sec) * 1000000 + qint64(ts.tv_nsec) / 1000;
+}
+
+static QString stampTextUs(qint64 us) {
+    return QString::number(us / 1000000.0, 'f', 6);
+}
+
 
 FileLogger::FileLogger(QObject *parent) : QObject(parent) {}
 
@@ -46,6 +56,7 @@ bool FileLogger::start(const QString &baseFilePath, bool appendData,
         if (!noHeaders)
             writeHeader(m_files.last(), QLatin1String(reps[r]));
     }
+    m_startUs = nowUs();
     m_active = !m_files.isEmpty();
     return m_active;
 }
@@ -69,7 +80,9 @@ bool FileLogger::writeSnapshot(const QVector<CommLog::Row> &rows,
     m_files.append(f);
     m_active = true;
     writeHeader(m_files.last(), representation);
+    const qint64 baseUs = rows.isEmpty() ? 0 : rows.first().stampUs;
     for (const auto &row : rows) {
+        m_files.last().stampUs = row.stampUs - baseUs;
         writeRow(m_files.last(), representation, row.direction, row.channel,
                  row.data, row.text, row.stampMs, row.highlighted);
     }
@@ -153,6 +166,7 @@ QString FileLogger::stampText(qint64 stampMs) {
     return QDateTime::fromMSecsSinceEpoch(stampMs).toString("MM/dd/yyyy HH:mm:ss.zzz");
 }
 
+// Seconds-only stamp with microsecond precision.
 void FileLogger::writeHeader(File &f, const QString &representation) {
     if (m_format == 1) {
         // Docklight "Customize HTML output": the CSS font/style of the log
@@ -205,7 +219,10 @@ void FileLogger::writeRow(File &f, const QString &representation, int direction,
         if (channel >= 0)
             tag += QString::number(channel + 1);
     }
-    QString prefix = stampText(stampMs) + QLatin1Char(' ');
+    QString prefix = m_microStamps
+        ? stampTextUs(f.stampUs >= 0 ? f.stampUs : nowUs() - m_startUs)
+              + QLatin1Char(' ')
+        : stampText(stampMs) + QLatin1Char(' ');
     if (!tag.isEmpty())
         prefix += QLatin1Char('[') + tag + QStringLiteral("] - ");
     if (m_format == 1) {

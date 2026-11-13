@@ -180,6 +180,11 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] Microsecond timing — the µs toolbar toggle (and DL.SetMicroStamps /
+      DL.GetMicroStamps) switches every time display to seconds-only with
+      6 decimals: the clock column counts seconds from window start, the
+      delta column shows us-accurate gaps between rows, and the log files /
+      saved snapshots use the same format (CLOCK_REALTIME us precision)
 - [x] Example projects under examples/ (ping-pong demo, Modbus RTU
       master/slave pair with CRC areas)
 - [x] External editor (Customize / External Editor) — command template with

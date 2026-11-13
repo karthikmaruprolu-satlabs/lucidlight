@@ -2,19 +2,33 @@
 #include "dataformat.h"
 
 #include <QDateTime>
+#include <time.h>
 
 namespace {
 QString clockString(qint64 ms) {
     const QTime time = QTime::fromMSecsSinceStartOfDay(int(ms % (24 * 3600 * 1000)));
     return time.toString("HH:mm:ss.zzz");
 }
+
+// True microsecond wall clock (QDateTime only resolves to milliseconds).
+qint64 nowUs() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return qint64(ts.tv_sec) * 1000000 + qint64(ts.tv_nsec) / 1000;
+}
 QString deltaString(qint64 deltaMs) {
     return QString::number(deltaMs / 1000.0, 'f', 3) + "s";
+}
+
+// Seconds with microsecond precision (6 decimals).
+QString secondsStringUs(qint64 us) {
+    return QString::number(us / 1000000.0, 'f', 6) + "s";
 }
 }  // namespace
 
 CommLog::CommLog(QObject *parent) : QAbstractListModel(parent) {
     m_startMs = QDateTime::currentMSecsSinceEpoch();
+    m_startUs = nowUs();
 }
 
 int CommLog::rowCount(const QModelIndex &parent) const {
@@ -148,8 +162,13 @@ QVariant CommLog::data(const QModelIndex &index, int role) const {
     const Row &row = m_rows.at(physical);
     switch (role) {
     case IndexRole: return physical + m_trimmed + 1;
-    case ClockRole: return clockString(row.stampMs);
-    case DeltaRole: return deltaString(row.deltaMs);
+    case ClockRole:
+        // Seconds-only display with microsecond precision when enabled.
+        return m_microStamps ? secondsStringUs(row.stampUs - m_startUs)
+                             : clockString(row.stampMs);
+    case DeltaRole:
+        return m_microStamps ? secondsStringUs(row.deltaUs)
+                             : deltaString(row.deltaMs);
     case DirectionRole: return row.direction;
     case ChannelRole: return row.channel;
     case TextRole: return row.text;
@@ -182,6 +201,13 @@ void CommLog::setShowDelta(bool on) {
     if (on == m_showDelta)
         return;
     m_showDelta = on;
+    emit displayChanged();
+}
+
+void CommLog::setMicroStamps(bool on) {
+    if (on == m_microStamps)
+        return;
+    m_microStamps = on;
     emit displayChanged();
 }
 
@@ -235,6 +261,7 @@ void CommLog::setSearchText(const QString &text) {
 
 void CommLog::startClock() {
     m_startMs = QDateTime::currentMSecsSinceEpoch();
+    m_startUs = nowUs();
 }
 
 void CommLog::flushPending() {
@@ -275,6 +302,10 @@ void CommLog::append(Direction direction, int channel, const QByteArray &data,
     row.channel = channel;
     row.data = data;
     row.stampMs = QDateTime::currentMSecsSinceEpoch();
+    row.stampUs = nowUs();
+    if (m_startUs == 0)
+        m_startUs = row.stampUs;
+    row.deltaUs = m_rows.isEmpty() ? 0 : row.stampUs - m_rows.last().stampUs;
     // Pause detection: after a silent gap longer than the threshold, restart
     // the relative clock so the break is visible in the delta column.
     if (m_pauseStampMs > 0 && !m_rows.isEmpty()) {
@@ -282,6 +313,7 @@ void CommLog::append(Direction direction, int channel, const QByteArray &data,
         if (gap >= m_pauseStampMs) {
             row.deltaMs = gap;
             m_startMs = row.stampMs;
+            m_startUs = row.stampUs;
         } else {
             row.deltaMs = row.stampMs - m_startMs;
         }
@@ -373,7 +405,8 @@ void CommLog::trimIfNeeded() {
 QString CommLog::toText() const {
     QString text;
     for (const Row &row : m_rows) {
-        text.append(clockString(row.stampMs));
+        text.append(m_microStamps ? secondsStringUs(row.stampUs - m_startUs)
+                                  : clockString(row.stampMs));
         text.append(QLatin1Char('\t'));
         switch (row.direction) {
         case Rx: text.append(row.channel >= 0 ? QString("RX%1").arg(row.channel + 1) : "RX"); break;
