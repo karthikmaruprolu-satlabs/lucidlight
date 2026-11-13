@@ -2,6 +2,8 @@
 // in the spirit of Docklight.
 
 #include <QCommandLineParser>
+
+constexpr const char *LUCIDLIGHT_VERSION = "0.3.2";
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -214,8 +216,10 @@ int main(int argc, char *argv[]) {
         const QString arg = QString::fromLocal8Bit(argv[i]);
         if (arg == QLatin1String("run")) {
             QCoreApplication app(argc, argv);
+            app.setApplicationVersion(LUCIDLIGHT_VERSION);
             QCommandLineParser parser;
             parser.addHelpOption();
+            parser.addVersionOption();
             parser.addPositionalArgument("project", "Project file (.llproj), optional");
             QCommandLineOption scriptOption("script", "Script file to run", "file");
             QCommandLineOption durationOption("duration", "Seconds to run", "seconds", "10");
@@ -246,7 +250,7 @@ int main(int argc, char *argv[]) {
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("lucidlight");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion(LUCIDLIGHT_VERSION);
     app.setOrganizationName("lucidlight");
     app.setDesktopFileName("lucidlight");
     app.setWindowIcon(QIcon::fromTheme("lucidlight"));
@@ -270,8 +274,6 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     qmlRegisterType<JsHighlighter>("Lucidlight", 1, 0, "JsHighlighter");
     QObject::connect(&translator, &Translator::changed, &engine, &QQmlEngine::retranslate);
-    QObject::connect(&app, &QGuiApplication::aboutToQuit, &backend, &Backend::saveSession);
-    engine.rootContext()->setContextProperty("translator", &translator);
     QObject::connect(&app, &QGuiApplication::aboutToQuit, &backend, &Backend::saveSession);
     engine.rootContext()->setContextProperty("translator", &translator);
     engine.rootContext()->setContextProperty("theme", &theme);

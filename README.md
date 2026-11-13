@@ -189,6 +189,11 @@ into `~/.pi/agent/skills/lucidlight/`.
 tests/grab_harness   # LUCID_SIM=1 LUCID_TAB=script ./grab_harness — screenshots offscreen
 ```
 
+## Continuous integration
+
+Every push runs the full 100-test suite on GitHub Actions (Ubuntu 24.04,
+Qt 6): `.github/workflows/ci.yml`.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

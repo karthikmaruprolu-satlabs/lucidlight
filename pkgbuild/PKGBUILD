@@ -1,5 +1,5 @@
 pkgname=lucidlight
-pkgver=0.3.1
+pkgver=0.3.2
 pkgrel=1
 pkgdesc='Serial monitor, terminal, and test scripting for the desktop'
 arch=('x86_64' 'aarch64')
@@ -20,4 +20,5 @@ package() {
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 "$startdir/lucidlight.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/lucidlight.svg"
   install -Dm644 "$startdir/lucidlight.desktop" "$pkgdir/usr/share/applications/lucidlight.desktop"
+  install -Dm644 "$startdir/../docs/lucidlight.1" "$pkgdir/usr/share/man/man1/lucidlight.1"
 }

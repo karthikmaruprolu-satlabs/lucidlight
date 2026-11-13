@@ -1,0 +1,80 @@
+.\" Lucidlight manual page
+.TH LUCIDLIGHT 1 "November 2026" "lucidlight 0.3.2" "User Commands"
+.SH NAME
+lucidlight \- serial monitor, terminal, and test scripting
+.SH SYNOPSIS
+.B lucidlight
+.RI [ project.llproj ]
+.br
+.B lucidlight run
+.RI [ options ]
+.RI [ project.llproj ]
+.SH DESCRIPTION
+.B lucidlight
+is a serial/Ethernet communication monitor, terminal, and scripted test tool
+for the Linux desktop, in the spirit of Docklight Scripting. It supports two
+serial ports (or network channels), send/receive sequences with triggers and
+checksums, DL script automation (JavaScript, with transparent VBScript
+compatibility), timestamped communication logging down to microseconds, and
+snapshot captures.
+.PP
+Run without arguments it opens the graphical window. Run with the
+.B run
+subcommand it executes headless — over SSH or in test harnesses — driving the
+project and script without a display.
+.SH OPTIONS (GUI)
+.TP
+.BR run " " (none)
+Open the graphical application. Start/stop communication with Space; send the
+typed data with Enter.
+.SH OPTIONS (HEADLESS RUN)
+.TP
+.BR \-\-script " " \fIfile\fR
+JavaScript (or VBScript) file to execute against the DL object.
+.TP
+.BR \-\-duration " " \fIseconds\fR
+Run for this many seconds, then quit (default 10).
+.TP
+.BR \-\-port\-a " " \fIdevice\fR ", " \-\-port\-b " " \fIdevice\fR
+Override the channel devices, e.g. /dev/ttyUSB0, TCP:host:port, UDP:port,
+UNIX:path.
+.TP
+.BR \-\-mode " " \fIn\fR
+0 single, 1 redirect, 2 monitor.
+.TP
+.BR \-\-baud " " \fIrate\fR
+Override the serial baud rate.
+.TP
+.B \-\-json
+Emit NDJSON events and a final result line instead of plain text.
+.TP
+.BR \-\-out " " \fIfile\fR
+Save the communication log to this file (.txt/.log, .htm, .rtf, .md).
+.TP
+.B \-\-version
+Print the version and exit.
+.SH DATA NOTATION
+.RS
+[0D] inserts a hex byte, [[ a literal bracket, ?? matches one unknown byte in
+receive patterns. Text, HEX, DEC and Binary representations are supported.
+.SH SCRIPTING
+Scripts access the
+.B DL
+object: DL.SendHex, DL.SendStr, DL.WaitForSequence, DL.Comment, DL.Pause,
+checksum generation, DL_OnReceive / DL_OnSend event handlers, and more. See
+the in-app help (? key) for the full reference. Classic Docklight VBScript
+samples are auto-translated.
+.SH FILES
+.TP
+.I ~/.local/state/lucidlight/session.json
+Autosaved session (project, script, recent files, options).
+.SH EXAMPLES
+.TP
+.B lucidlight run loopback.llproj \-\-script test.js
+Run a script against a project headless.
+.TP
+.B socat \-d \-d pty,raw,echo=0 EXEC:cat,pty,raw,echo=0
+Create a loopback pair of pseudo-terminals for testing.
+.SH SEE ALSO
+Project documentation in /usr/share/doc/lucidlight, examples at
+https://github.com/karthikreddy-satlabs/lucidlight
