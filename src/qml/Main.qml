@@ -102,7 +102,13 @@ ApplicationWindow {
     Shortcut { sequence: "F12"; onActivated: bottomBar.visible = !bottomBar.visible }
     Shortcut { sequence: "Shift+F12"; onActivated: sidebar.visible = !sidebar.visible }
     Shortcut { sequence: "Shift+F5"; onActivated: { bottomBar.visible = true; bottomBar.currentIndex = 1; scriptPanel.runScript(); } }
-    Shortcut { sequence: "Shift+F6"; onActivated: backend.scripts.stop() }
+    Shortcut {
+        sequence: "Shift+F6"
+        onActivated: {
+            backend.scripts.stop();
+            backend.stopDispatches();
+        }
+    }
     Shortcut { sequence: "Shift+F7"; onActivated: { bottomBar.visible = true; bottomBar.currentIndex = 1 } }
     Shortcut { sequence: "Shift+F8"; onActivated: { bottomBar.visible = true; bottomBar.currentIndex = 1; scriptPanel.runScript(); } }
     Shortcut { sequence: "Ctrl+T"; onActivated: saveScript() }

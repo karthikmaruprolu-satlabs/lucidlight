@@ -90,6 +90,9 @@ public:
     SequenceModel *sequences() const { return m_sequences; }
     CommLog *log() const { return m_log; }
     ScriptRunner *scripts() const { return m_runner; }
+    Q_INVOKABLE bool scriptDispatch(const QString &path);
+    void stopDispatches();
+    int dispatchCount() const { return m_dispatches.size(); }   // test/agent hook
     PortEnumerator *ports() const { return m_ports; }
     PortalPicker *picker() const { return m_picker; }
     QString scriptSource() const { return m_scriptSource; }
@@ -256,6 +259,7 @@ private:
     SequenceModel *m_sequences;
     CommLog *m_log;
     ScriptRunner *m_runner;
+    QVector<ScriptRunner *> m_dispatches;
     PortEnumerator *m_ports;
     PortalPicker *m_picker;
     // One matcher per main port: a pattern must never match across a

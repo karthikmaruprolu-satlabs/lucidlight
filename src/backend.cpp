@@ -1268,6 +1268,47 @@ void Backend::runScript(const QString &source) {
     m_runner->run(source);
 }
 
+bool Backend::scriptDispatch(const QString &path) {
+    // Docklight Dispatch: up to 8 parallel dispatched scripts, each in its
+    // own worker thread sharing the comm channels and sequence model.
+    if (m_dispatches.size() >= 8) {
+        m_log->appendEvent(tr("Dispatch limit reached (8 scripts)"));
+        return false;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        m_log->appendEvent(tr("Dispatch: cannot open %1").arg(path));
+        return false;
+    }
+    ScriptRunner *runner = new ScriptRunner(m_comm, m_sequences, this, this);
+    m_dispatches.append(runner);
+    connect(runner, &ScriptRunner::commentRequested, m_log,
+            [this](const QString &text, bool pendingLine) {
+                m_log->appendComment(text, pendingLine);
+            });
+    connect(runner, &ScriptRunner::outputLine, this,
+            [this](const QString &line, bool error) {
+                m_log->appendEvent(error ? tr("script error: %1").arg(line) : line);
+            });
+    connect(runner, &ScriptRunner::sendRequest, this, &Backend::scriptSendSequence,
+            Qt::QueuedConnection);
+    connect(runner, &ScriptRunner::dialogRequest, this, &Backend::scriptDialog,
+            Qt::QueuedConnection);
+    connect(runner, &ScriptRunner::clearRequested, m_log, &CommLog::clear);
+    connect(runner, &ScriptRunner::finished, this, [this, runner] {
+        m_dispatches.removeAll(runner);
+        runner->deleteLater();
+    });
+    m_log->appendEvent(tr("Dispatched script: %1").arg(path));
+    runner->runFile(path);
+    return true;
+}
+
+void Backend::stopDispatches() {
+    for (ScriptRunner *runner : m_dispatches)
+        runner->stop();
+}
+
 void Backend::runScriptFile(const QString &path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -1301,6 +1342,8 @@ QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {
     if (name == "scriptStartLogging")
         return scriptStartLogging(arg(0).toString(), arg(1).toBool(), arg(2).toString(),
                                   arg(3).toInt(), arg(4).toBool());
+    if (name == "scriptDispatch")
+        return scriptDispatch(arg(0).toString());
     if (name == "scriptStopLogging") {
         scriptStopLogging();
         return {};

@@ -146,6 +146,7 @@ int runHeadless(const QString &projectPath, const QString &scriptPath, int durat
         // Both timers race: whoever finishes first ends the run.
         loop.exec();
         backend.scripts()->stop();
+        backend.stopDispatches();
         exitCode = scriptDone && !scriptOk ? 1 : 0;
         if (json) {
             QJsonObject result;

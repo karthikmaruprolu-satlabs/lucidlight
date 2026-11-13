@@ -180,6 +180,11 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] DL.Dispatch (Docklight dispatching) — run another script file in
+      parallel; each dispatched script lives in its own worker thread
+      sharing the comm channels and sequence model (up to 8 concurrent).
+      Comments/output and sequence sends route to the same window;
+      Shift+F6 / StopCommunication / headless exit stop them all.
 - [x] Auto-reopen (Lucidlight extension, Expert Options) — while comm runs,
       any closed main channel is retried every 2 s: serial USB
       unplug/replug, dropped TCP client, or a channel that started in the

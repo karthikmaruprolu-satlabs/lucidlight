@@ -180,6 +180,10 @@ public:
     // ---- communication ----------------------------------------------------
     Q_INVOKABLE bool StartCommunication();
     Q_INVOKABLE void StopCommunication();
+    // Docklight Dispatch: run another script file in parallel. The call
+    // returns immediately; the dispatched script lives in its own worker
+    // thread sharing the communication channels and sequences.
+    Q_INVOKABLE bool Dispatch(const QString &scriptFilePathName);
     Q_INVOKABLE bool IsCommRunning() const;
     Q_INVOKABLE bool SetCommMode(int mode);
     Q_INVOKABLE void ClearCommWindows();

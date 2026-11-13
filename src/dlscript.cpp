@@ -438,6 +438,15 @@ bool DLObject::StartCommunication() {
     return m_host->m_comm->running();
 }
 
+bool DLObject::Dispatch(const QString &scriptFilePathName) {
+    if (scriptFilePathName.trimmed().isEmpty()) {
+        m_host->m_lastError = QStringLiteral("Dispatch: empty script path");
+        Fail(m_host->m_lastError);
+        return false;
+    }
+    return m_host->callBridge("scriptDispatch", {scriptFilePathName}).toBool();
+}
+
 void DLObject::StopCommunication() {
     if (!m_host->m_comm)
         return;

@@ -2019,6 +2019,61 @@ private slots:
 
 
 
+
+    void dispatchRunsParallelScripts()
+    {
+        // Docklight Dispatch: two scripts run at the same time in their own
+        // worker threads, sharing the comm channels. Their TX cadences
+        // interleave on the shared channel.
+        // A real PTY as the shared channel so the scripts can transmit.
+        int master = posix_openpt(O_RDWR | O_NOCTTY);
+        QVERIFY(master >= 0);
+        grantpt(master);
+        unlockpt(master);
+        Backend backend;
+        backend.channelA()->setDevice(ptsname(master));
+        QTemporaryDir dir;
+        const QString a = dir.path() + "/a.js";
+        const QString b = dir.path() + "/b.js";
+        auto write = [](const QString &path, const char *code) {
+            QFile f(path);
+            f.open(QIODevice::WriteOnly | QIODevice::Text);
+            f.write(code);
+        };
+        write(a, "DL.StartCommunication();"
+                 "for (var i = 0; i < 4; i++) { DL.SendHex(\"41\"); DL.Pause(50); }");
+        write(b, "DL.StartCommunication();"
+                 "for (var i = 0; i < 4; i++) { DL.SendHex(\"42\"); DL.Pause(80); }");
+        QVERIFY(backend.scriptDispatch(a));
+        QVERIFY(backend.scriptDispatch(b));
+        // Both runners are active concurrently.
+        QTRY_VERIFY_WITH_TIMEOUT(backend.dispatchCount() == 0, 3000);
+        // Both scripts transmitted: 8 rows, 4 with 41 and 4 with 42.
+        int aCount = 0, bCount = 0;
+        for (int i = 0; i < backend.log()->count(); ++i) {
+            const auto dir = backend.log()->data(
+                backend.log()->index(i, 0), CommLog::DirectionRole).toInt();
+            if (dir != CommLog::Tx && dir != CommLog::Rx)
+                continue;   // skip event/comment rows
+            const QString hex = backend.log()->hexAt(i);
+            if (hex == "41") ++aCount;
+            if (hex == "42") ++bCount;
+        }
+        if (aCount != 4 || bCount != 4) {
+            QString dump;
+            for (int i = 0; i < backend.log()->count(); ++i)
+                dump += QString("[%1]%2 ")
+                            .arg(backend.log()->data(
+                                backend.log()->index(i, 0),
+                                CommLog::DirectionRole).toInt())
+                            .arg(backend.log()->hexAt(i).left(12));
+            qWarning() << "DISPATCH ROWS:" << dump;
+        }
+        QCOMPARE(aCount, 4);
+        QCOMPARE(bCount, 4);
+        close(master);
+    }
+
     void autoReopenSerial()
     {
         // Real PTY pair via posix_openpt.
