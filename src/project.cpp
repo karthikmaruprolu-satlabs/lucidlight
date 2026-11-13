@@ -133,6 +133,45 @@ QString Project::displayFormatName(DataFormat::Format format) {
     }
 }
 
+
+QJsonObject Project::sequenceToJson(const Sequence &seq) {
+    QJsonObject object;
+    object["id"] = seq.id;
+    object["name"] = seq.name;
+    object["isSend"] = seq.isSend;
+    object["format"] = Project::displayFormatName(seq.format);
+    object["data"] = seq.data;
+    object["hotkey"] = seq.hotkey;
+    object["repeatIntervalMs"] = seq.repeatIntervalMs;
+    object["replyToId"] = seq.replyToId;
+    object["enabled"] = seq.enabled;
+    object["comment"] = seq.comment;
+    object["trigger"] = seq.trigger;
+    object["stopRun"] = seq.stopRun;
+    object["checksumSpec"] = seq.checksumSpec;
+    object["checksumMode"] = seq.checksumMode;
+    return object;
+}
+
+Sequence Project::sequenceFromJson(const QJsonObject &object) {
+    Sequence seq;
+    seq.id = object.value("id").toInt(1);
+    seq.name = object.value("name").toString();
+    seq.isSend = object.value("isSend").toBool(true);
+    seq.format = Project::displayFormatFromName(object.value("format").toString());
+    seq.data = object.value("data").toString();
+    seq.hotkey = object.value("hotkey").toInt(0);
+    seq.repeatIntervalMs = object.value("repeatIntervalMs").toInt(0);
+    seq.replyToId = object.value("replyToId").toInt(-1);
+    seq.enabled = object.value("enabled").toBool(true);
+    seq.comment = object.value("comment").toString();
+    seq.trigger = object.value("trigger").toBool(false);
+    seq.stopRun = object.value("stopRun").toBool(false);
+    seq.checksumSpec = object.value("checksumSpec").toString();
+    seq.checksumMode = object.value("checksumMode").toInt(0);
+    return seq;
+}
+
 DataFormat::Format Project::displayFormatFromName(const QString &name) {
     // Tolerant matching: "hex", "HEX", "Hex" and the Docklight
     // representation letters H/D/B/A all work.

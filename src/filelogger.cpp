@@ -34,7 +34,7 @@ bool FileLogger::start(const QString &baseFilePath, bool appendData,
             m_representations.append(c);
     if (m_representations.isEmpty())
         m_representations.append("H");
-    m_format = qBound(0, format, 2);
+    m_format = qBound(0, format, 3);
 
     static const char *suffixes[] = {"_asc", "_hex", "_dec", "_bin"};
     static const char *reps[] = {"A", "H", "D", "B"};
@@ -42,7 +42,10 @@ bool FileLogger::start(const QString &baseFilePath, bool appendData,
     for (int r = 0; r < 4; ++r) {
         if (!m_representations.contains(QLatin1Char(*reps[r])))
             continue;
-        const QString suffix = m_format == 1 ? ".htm" : m_format == 2 ? ".rtf" : ".txt";
+        const QString suffix = m_format == 1 ? ".htm"
+                               : m_format == 2 ? ".rtf"
+                               : m_format == 3 ? ".md"
+                               : ".txt";
         File f;
         f.file = new QFile(base + suffixes[r] + suffix, this);
         if (!f.file->open(QIODevice::WriteOnly | (appendData ? QIODevice::Append
@@ -162,6 +165,16 @@ QString FileLogger::binaryText(const QByteArray &data) {
     return out;
 }
 
+// Markdown table cell text: escape pipes and backticks so a data row
+// cannot break the table.
+QString FileLogger::markdownCell(const QString &text) {
+    QString out = text;
+    out.replace('\\', "\\\\");
+    out.replace('|', "\\|");
+    out.replace('`', "\\`");
+    return out;
+}
+
 QString FileLogger::stampText(qint64 stampMs) {
     return QDateTime::fromMSecsSinceEpoch(stampMs).toString("MM/dd/yyyy HH:mm:ss.zzz");
 }
@@ -185,8 +198,12 @@ void FileLogger::writeHeader(File &f, const QString &representation) {
     } else if (m_format == 2) {
         *f.stream << "{\\rtf1\n";
     }
+    if (m_format == 3)
+        *f.stream << "# Lucidlight communication log\n\n";
     *f.stream << "Docklight Log File started... (" << stampText(QDateTime::currentMSecsSinceEpoch())
               << ", " << representation << ")\n";
+    if (m_format == 3)
+        *f.stream << "\n";
 }
 
 void FileLogger::writeFooter(File &f) {
@@ -196,6 +213,8 @@ void FileLogger::writeFooter(File &f) {
         *f.stream << "</pre>\n</body>\n</html>\n";
     else if (m_format == 2)
         *f.stream << "}\n";
+    else if (m_format == 3)
+        *f.stream << "\n*Docklight Log File stopped*\n";
 }
 
 void FileLogger::writeRow(File &f, const QString &representation, int direction, int channel,
@@ -218,6 +237,32 @@ void FileLogger::writeRow(File &f, const QString &representation, int direction,
         tag = direction == CommLog::Tx ? QStringLiteral("TX") : QStringLiteral("RX");
         if (channel >= 0)
             tag += QString::number(channel + 1);
+    }
+    if (m_format == 3) {
+        // Markdown table row. The first data row also emits the table head.
+        if (!f.mdHeadDone) {
+            *f.stream << "| Stamp | Direction | Data (" << representation
+                      << ") |\n|---|---|---|\n";
+            f.mdHeadDone = true;
+        }
+        const QString stamp = m_microStamps
+            ? stampTextUs(f.stampUs >= 0 ? f.stampUs : nowUs() - m_startUs)
+            : stampText(stampMs);
+        QString dirCell;
+        if (tag == "NOTE")
+            dirCell = "NOTE";
+        else if (tag.isEmpty())
+            dirCell = "Comment";
+        else
+            dirCell = tag;
+        const QString cell = markdownCell(body);
+        *f.stream << "| " << stamp << " | " << dirCell << " | "
+                  << (highlighted && direction != CommLog::Comment
+                          ? "**" + cell + "**"
+                          : "`" + cell + "`")
+                  << " |\n";
+        f.stream->flush();
+        return;
     }
     QString prefix = m_microStamps
         ? stampTextUs(f.stampUs >= 0 ? f.stampUs : nowUs() - m_startUs)

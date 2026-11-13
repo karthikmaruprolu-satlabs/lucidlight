@@ -171,6 +171,17 @@ int SequenceModel::findByName(const QString &name) const {
     return -1;
 }
 
+
+void SequenceModel::appendMany(const QVector<Sequence> &list) {
+    if (list.isEmpty())
+        return;
+    beginInsertRows({}, m_sequences.size(), m_sequences.size() + list.size() - 1);
+    for (const Sequence &s : list)
+        m_sequences.append(s);
+    endInsertRows();
+    emit countChanged();
+}
+
 void SequenceModel::replaceAll(const QVector<Sequence> &sequences) {
     beginResetModel();
     m_sequences = sequences;

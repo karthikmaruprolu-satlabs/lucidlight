@@ -180,6 +180,15 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] Markdown log export (.md) — table output with Stamp/Direction/Data
+      columns, pipe/backtick escaping, highlighted rows bold; Save dialog
+      and snapshot writer accept the new format
+- [x] Expert Options high priority timing — Linux adaptation of Docklight's
+      Expert Options "high priority process": rtkit D-Bus, then
+      sched_setscheduler, then nice, best effort with a toast when the
+      scheduler refuses; persisted in the session
+- [x] Sequence library (.llseq) export/import — share all sequences between
+      projects, ids remapped and names deduplicated with " (2)" on import
 - [x] Recent files menu (File > Open Recent) — newest-first, deduplicated,
       10 entries, persisted across sessions, with a Clear list action
 - [x] DL.GetKeyState partial parity upgrade — VK_SHIFT (16), VK_CONTROL (17),

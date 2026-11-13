@@ -48,6 +48,10 @@ class Backend : public QObject {
     // Docklight "Customize / External Editor": command template with %FILE%
     // and %LINE% wildcards; empty = use the built-in editor.
     Q_PROPERTY(QString externalEditor READ externalEditor WRITE setExternalEditor NOTIFY externalEditorChanged)
+    // Docklight Expert Options: "high priority process" timing mode, adapted
+    // to Linux (rtkit -> sched_setscheduler -> nice, best effort).
+    Q_PROPERTY(bool highPriorityTiming READ highPriorityTiming
+               WRITE setHighPriorityTiming NOTIFY highPriorityTimingChanged)
     // Docklight's project option: run the script when the project opens.
     Q_PROPERTY(bool runOnOpen READ runOnOpen WRITE setRunOnOpen NOTIFY stateChanged)
     // Docklight's "additional date/time stamp": period in seconds for the
@@ -67,6 +71,9 @@ public:
     void setProjectPath(const QString &path);
     QStringList recentFiles() const { return m_recentFiles; }
     Q_INVOKABLE void clearRecentFiles();
+    // Sequence library: share sequences between projects (.llseq JSON).
+    Q_INVOKABLE bool exportSequences(const QString &path);
+    Q_INVOKABLE int importSequences(const QString &path); // returns imported count
     void pushRecentFile(const QString &path);
     QString commStateText() const;
 
@@ -80,6 +87,9 @@ public:
     PortalPicker *picker() const { return m_picker; }
     QString scriptSource() const { return m_scriptSource; }
     QString externalEditor() const { return m_externalEditor; }
+    bool highPriorityTiming() const { return m_highPriorityTiming; }
+    void setHighPriorityTiming(bool on);
+    bool applyHighPriority();
     void setExternalEditor(const QString &cmd);
     Q_INVOKABLE bool editScriptExternally();
     void setScriptSource(const QString &source);
@@ -187,6 +197,7 @@ signals:
     void recentFilesChanged();
     void scriptChanged();
     void externalEditorChanged();
+    void highPriorityTimingChanged();
     void toast(const QString &text);
     // Blocking script dialogs (DL.MsgBox2 / DL.InputBox2); QML shows the
     // dialog and answers via answerScriptDialog.
@@ -242,6 +253,7 @@ private:
     QString m_projectPath;
     QString m_scriptSource;
     QString m_externalEditor;
+    bool m_highPriorityTiming = false;
     QFileSystemWatcher *m_scriptWatcher = nullptr;
     QString m_scriptTempFile;
     bool m_runOnOpen = false;

@@ -118,7 +118,8 @@ ApplicationWindow {
     function saveLog() {
         pickerFlows.openSave = false;
         pickerFlows.kind = "log";
-        picker.saveFile(qsTr("Save communication log"), qsTr("Log file"), "*.log", "lucidlight.log");
+        picker.saveFile(qsTr("Save communication log (log/txt/htm/rtf/md)"),
+                        qsTr("Log file"), "*.log", "lucidlight.log");
     }
 
     function printLog() {
@@ -172,10 +173,25 @@ ApplicationWindow {
     Connections {
         target: backend.picker
         function onFileOpened(path) {
+            if (pickerFlows.kind === "seqimport") {
+                if (path !== "")
+                    backend.importSequences(path);
+                return;
+            }
             if (pickerFlows.openSave && path !== "")
                 backend.openProjectFrom(path);
         }
         function onFileSaved(path) {
+            if (pickerFlows.kind === "seqexport") {
+                if (path !== "")
+                    backend.exportSequences(path);
+                return;
+            }
+            if (pickerFlows.kind === "seqimport") {
+                if (path !== "")
+                    backend.importSequences(path);
+                return;
+            }
             if (pickerFlows.openSave && pickerFlows.kind === "script") {
                 if (path !== "")
                     backend.saveScriptTo(path);
@@ -825,6 +841,24 @@ ApplicationWindow {
         MenuItem {
             text: qsTr("Customize / External Editor\u2026")
             onTriggered: extEditorDialog.open()
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("Export sequence library\u2026")
+            enabled: backend.sequences.count > 0
+            onTriggered: pickerFlows.kind = "seqexport", pickerFlows.openSave = true,
+                         picker.saveFile(qsTr("Export sequence library"), qsTr("Sequence library"), "*.llseq", "sequences.llseq")
+        }
+        MenuItem {
+            text: qsTr("Import sequence library\u2026")
+            onTriggered: pickerFlows.kind = "seqimport", pickerFlows.openSave = false,
+                         picker.openFile(qsTr("Import sequence library"), qsTr("Sequence library"), "*.llseq")
+        }
+        MenuItem {
+            text: qsTr("Expert Options: high priority timing")
+            checkable: true
+            checked: backend.highPriorityTiming
+            onTriggered: backend.highPriorityTiming = checked
         }
         MenuSeparator {}
         MenuItem {

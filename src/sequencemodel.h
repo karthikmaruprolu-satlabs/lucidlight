@@ -78,6 +78,7 @@ public:
     const Sequence *sequenceAt(int row) const { return row >= 0 && row < m_sequences.size() ? &m_sequences.at(row) : nullptr; }
 
     void replaceAll(const QVector<Sequence> &sequences);
+    void appendMany(const QVector<Sequence> &sequences);
 
 signals:
     void countChanged();

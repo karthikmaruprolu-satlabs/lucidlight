@@ -1,5 +1,11 @@
 #include "backend.h"
 
+#include <QDBusInterface>
+#include <QDBusReply>
+#include <sched.h>
+#include <sys/resource.h>
+#include <unistd.h>
+
 #include "checksum.h"
 
 #include <QClipboard>
@@ -1434,12 +1440,14 @@ void Backend::saveLogTo(const QString &path) {
     const QString suffix = QFileInfo(path).suffix().toLower();
     // Docklight's Save Log also accepts HTML and RTF; replay the buffered
     // window rows through the FileLogger machinery for those formats.
-    if (suffix == "htm" || suffix == "html" || suffix == "rtf") {
+    if (suffix == "htm" || suffix == "html" || suffix == "rtf" || suffix == "md") {
         static const char reps[] = "AHDB";
         FileLogger logger;
-        logger.setHtmlStyle(m_logger.htmlStyle());
+        if (suffix != "md")
+            logger.setHtmlStyle(m_logger.htmlStyle());
         if (!logger.writeSnapshot(
-                m_log->rows(), path, suffix == "rtf" ? 2 : 1,
+                m_log->rows(), path,
+                suffix == "rtf" ? 2 : suffix == "md" ? 3 : 1,
                 QLatin1Char(reps[int(m_log->displayFormat())]))) {
             emit toast(tr("Cannot write %1").arg(path));
             return;
@@ -1510,6 +1518,105 @@ void Backend::newProject() {
     setDirty(false);
 }
 
+
+
+// Docklight's Expert Options "high priority process mode", adapted to Linux.
+// Attempt order: rtkit (the standard unprivileged path desktop apps use),
+// then sched_setscheduler, then a nice bump. All best effort — if none is
+// permitted we keep normal scheduling; timing accuracy then relies on the
+// µs CLOCK_REALTIME stamps alone.
+bool Backend::applyHighPriority() {
+    // 1) rtkit: grants SCHED_RR to normal users on most desktop systems.
+    QDBusInterface rtkit(QStringLiteral("org.freedesktop.RealtimeKit1"),
+                         QStringLiteral("/org/freedesktop/RealtimeKit1"),
+                         QStringLiteral("org.freedesktop.RealtimeKit1"),
+                         QDBusConnection::sessionBus());
+    QDBusReply<void> rr = rtkit.call(QStringLiteral("MakeRealtime"), 0u, 0u, 50u);
+    if (rr.isValid())
+        return true;
+    // 2) direct SCHED_FIFO / SCHED_RR (needs RLIMIT_RTPRIO or root).
+    for (int policy : {SCHED_FIFO, SCHED_RR}) {
+        sched_param param{};
+        param.sched_priority = 10;
+        if (sched_setscheduler(0, policy, &param) == 0)
+            return true;
+    }
+    // 3) nice: unprivileged processes can only lower priority, but try in
+    // case we run with elevated rlimit.
+    return setpriority(PRIO_PROCESS, 0, -10) == 0;
+}
+
+void Backend::setHighPriorityTiming(bool on) {
+    if (on == m_highPriorityTiming)
+        return;
+    m_highPriorityTiming = on;
+    if (on && !applyHighPriority())
+        emit toast(tr("High priority timing: scheduler change not permitted; "
+                      "continuing with normal priority"));
+    emit highPriorityTimingChanged();
+}
+
+
+bool Backend::exportSequences(const QString &path) {
+    if (path.isEmpty())
+        return false;
+    QString file = path.endsWith(QLatin1String(".llseq"), Qt::CaseInsensitive)
+                       ? path : path + ".llseq";
+    QJsonArray arr;
+    for (const Sequence &s : m_sequences->sequences())
+        arr.append(Project::sequenceToJson(s));
+    QJsonObject root;
+    root["lucidlightSequences"] = arr;
+    QSaveFile out(file);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Text))
+        return false;
+    out.write(QJsonDocument(root).toJson());
+    if (!out.commit())
+        return false;
+    m_log->appendEvent(tr("Sequence library exported: %1").arg(file));
+    return true;
+}
+
+int Backend::importSequences(const QString &path) {
+    if (path.isEmpty())
+        return 0;
+    QFile in(path);
+    if (!in.open(QIODevice::ReadOnly))
+        return 0;
+    const QJsonDocument doc = QJsonDocument::fromJson(in.readAll());
+    const QJsonArray arr = doc.object().value("lucidlightSequences").toArray();
+    if (arr.isEmpty())
+        return 0;
+    // New ids beyond anything present; names deduplicated with " (2)", " (3)"...
+    int nextId = 0;
+    for (const Sequence &s : m_sequences->sequences())
+        nextId = qMax(nextId, s.id + 1);
+    QSet<QString> names;
+    for (const Sequence &s : m_sequences->sequences())
+        names.insert(s.name.toLower());
+    QVector<Sequence> added;
+    for (const QJsonValue &v : arr) {
+        Sequence s = Project::sequenceFromJson(v.toObject());
+        if (names.contains(s.name.toLower())) {
+            int n = 2;
+            while (names.contains((s.name + QStringLiteral(" (%1)").arg(n)).toLower()))
+                ++n;
+            s.name = s.name + QStringLiteral(" (%1)").arg(n);
+        }
+        names.insert(s.name.toLower());
+        s.id = nextId++;
+        added.append(s);
+    }
+    if (added.isEmpty())
+        return 0;
+    m_sequences->appendMany(added);
+    setDirty(true);
+    emit stateChanged();
+    emit toast(tr("%1 sequence(s) imported").arg(added.size()));
+    m_log->appendEvent(tr("Sequence library imported: %1 (%2 sequences)")
+                           .arg(path).arg(added.size()));
+    return added.size();
+}
 
 void Backend::pushRecentFile(const QString &path) {
     m_recentFiles.removeAll(path);
@@ -1597,6 +1704,7 @@ void Backend::saveSession() {
         Project::save(m_comm, m_a, m_b, m_sequences, m_scriptSource, m_log, m_runOnOpen);
     // Program options (not part of the project file).
     state["externalEditor"] = m_externalEditor;
+    state["highPriorityTiming"] = m_highPriorityTiming;
     QJsonArray recent;
     for (const QString &f : m_recentFiles)
         recent.append(f);
@@ -1619,6 +1727,9 @@ bool Backend::loadSession() {
         return false;
     setScriptSource(script);
     m_externalEditor = state.value("externalEditor").toString();
+    const bool hp = state.value("highPriorityTiming").toBool();
+    if (hp != m_highPriorityTiming)
+        setHighPriorityTiming(hp);
     m_recentFiles.clear();
     for (const QJsonValue &v : state.value("recentFiles").toArray())
         m_recentFiles.append(v.toString());

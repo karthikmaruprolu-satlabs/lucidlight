@@ -49,6 +49,7 @@ private:
         QTextStream *stream = nullptr;
         QString representation;   // "A", "H", "D" or "B"
         qint64 stampUs = -1;      // fixed us offset (snapshot replay); -1 = live clock
+        bool mdHeadDone = false;  // markdown table head emitted yet?
     };
     void writeHeader(File &f, const QString &representation);
     void writeRow(File &f, const QString &representation, int direction, int channel,
@@ -59,10 +60,11 @@ private:
     static QString decimalText(const QByteArray &data);
     static QString binaryText(const QByteArray &data);
     static QString stampText(qint64 stampMs);
+    static QString markdownCell(const QString &text);
 
     QVector<File> m_files;
     QStringList m_representations;
-    int m_format = 0;   // 0 txt, 1 htm, 2 rtf
+    int m_format = 0;   // 0 txt, 1 htm, 2 rtf, 3 markdown
     bool m_active = false;
     QString m_htmlStyle;
     bool m_microStamps = false;

@@ -26,5 +26,7 @@ public:
                         ChannelSettings *b, SequenceModel *sequences, QString *script, CommLog *log,
                         bool *runOnOpen = nullptr, QString *scriptFile = nullptr);
     static QString displayFormatName(DataFormat::Format format);
+static QJsonObject sequenceToJson(const Sequence &seq);
+    static Sequence sequenceFromJson(const QJsonObject &object);
     static DataFormat::Format displayFormatFromName(const QString &name);
 };

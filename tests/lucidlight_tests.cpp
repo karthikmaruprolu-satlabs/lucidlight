@@ -2012,6 +2012,77 @@ private slots:
 
 
 
+
+
+    void sequenceLibraryRoundTrip()
+    {
+        Backend backend;
+        const int before = backend.sequences()->count();
+        backend.sequences()->add(QVariantMap{
+            {"name", "Lib Seq A"}, {"isSend", true},
+            {"data", "PING"}, {"format", "Text"}});
+        backend.sequences()->add(QVariantMap{
+            {"name", "Lib RX"}, {"isSend", false},
+            {"data", "ACK"}, {"format", "Text"}, {"comment", "%_S ok"}});
+        QTemporaryDir dir;
+        const QString lib = dir.path() + "/lib.llseq";
+        QVERIFY(backend.exportSequences(lib));
+        QFile f(lib);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QJsonObject root =
+            QJsonDocument::fromJson(f.readAll()).object();
+        f.close();
+        QCOMPARE(root.value("lucidlightSequences").toArray().size(),
+                 backend.sequences()->count());
+
+        // Import into a second backend: ids remapped, name collisions get " (2)".
+        Backend other;
+        other.sequences()->add(QVariantMap{
+            {"name", "Lib Seq A"}, {"isSend", true}, {"data", "X"}, {"format", "Text"}});
+        const int imported = other.importSequences(lib);
+        QCOMPARE(imported, backend.sequences()->count());
+        QCOMPARE(other.sequences()->count(), imported + 1);
+        bool foundRenamed = false;
+        for (const Sequence &s : other.sequences()->sequences())
+            if (s.name == "Lib Seq A (2)")
+                foundRenamed = true;
+        QVERIFY(foundRenamed);
+    }
+
+    void highPriorityTimingToggle()
+    {
+        Backend backend;
+        const bool before = backend.highPriorityTiming();
+        backend.setHighPriorityTiming(!before);
+        QCOMPARE(backend.highPriorityTiming(), !before);
+        // Best effort on this machine; the toggle must not crash either way.
+        backend.setHighPriorityTiming(before);
+        QCOMPARE(backend.highPriorityTiming(), before);
+    }
+
+    void markdownLogExport()
+    {
+        Backend backend;
+        backend.log()->append(CommLog::Tx, 0, QByteArray("pi|pe`x"), false);
+        backend.log()->append(CommLog::Rx, 0, QByteArray("\x01"), false);
+        backend.log()->appendComment("note with | pipe");
+        QTemporaryDir dir;
+        const QString path = dir.path() + "/log.md";
+        backend.saveLogTo(path);
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString md = QString::fromUtf8(f.readAll());
+        f.close();
+        QVERIFY(md.startsWith("# Lucidlight communication log"));
+        QVERIFY(md.contains("| Stamp | Direction | Data (A) |"));
+        // Pipe and backtick escaped so the table survives.
+        QVERIFY(md.contains("pi\\|pe\\`x"));
+        QVERIFY(md.contains("| TX1 |"));
+        QVERIFY(md.contains("| RX1 |"));
+        QVERIFY(md.contains("| Comment | `note with \\| pipe` |"));
+        QVERIFY(md.contains("*Docklight Log File stopped*"));
+    }
+
     void recentFilesTrackOpenAndSave()
     {
         // Docklight's File > Open Recent list: newest first, deduplicated,
