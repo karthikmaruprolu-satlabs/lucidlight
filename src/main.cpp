@@ -3,7 +3,7 @@
 
 #include <QCommandLineParser>
 
-constexpr const char *LUCIDLIGHT_VERSION = "0.3.2";
+constexpr const char *LUCIDLIGHT_VERSION = "0.3.3";
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
