@@ -5,6 +5,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <pty.h>
+#include <unistd.h>
 #include <QtTest>
 #include <QRegularExpression>
 #include <fcntl.h>
@@ -2015,6 +2017,52 @@ private slots:
 
 
 
+
+
+    void autoReopenSerial()
+    {
+        // Real PTY pair via posix_openpt.
+        int master = posix_openpt(O_RDWR | O_NOCTTY);
+        QVERIFY(master >= 0);
+        grantpt(master);
+        unlockpt(master);
+        const QString slavePath = ptsname(master);
+
+        // A device path that does not exist yet.
+        const QString fakePath = QDir::tempPath() + "/lucid-reopen-test";
+        QFile::remove(fakePath);
+
+        Backend backend;
+        backend.channelA()->setDevice(fakePath);
+        backend.channelA()->setBaud(115200);
+        // applySettings: failing open keeps the session in channel-error
+        // (the call reports false; the session keeps running).
+        backend.comm()->applySettings(backend.channelA()->config(),
+                                      backend.channelB()->config());
+        QVERIFY(backend.comm()->running());
+        QCOMPARE(backend.scriptChannelStatus(1), 3);   // channel error
+
+        backend.setAutoReopen(true);
+        // No device yet -> still closed.
+        backend.autoReopenCheck();
+        QVERIFY(!backend.comm()->link(0)->isOpen());
+
+        // The device "appears" (USB replug): symlink to the PTY slave.
+        QVERIFY(QFile::link(slavePath, fakePath));
+        backend.autoReopenCheck();
+        QTRY_VERIFY_WITH_TIMEOUT(backend.comm()->link(0)->isOpen(), 2000);
+        QCOMPARE(backend.scriptChannelStatus(1), 1);   // open again
+        // Event row logged.
+        bool found = false;
+        for (int i = 0; i < backend.log()->count(); ++i)
+            if (backend.log()->textAt(i).contains("Reopened"))
+                found = true;
+        QVERIFY(found);
+
+        QFile::remove(fakePath);
+        backend.setAutoReopen(false);
+        close(master);
+    }
 
     void windowGeometryPersists()
     {

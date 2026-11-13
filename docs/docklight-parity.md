@@ -180,6 +180,14 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] Auto-reopen (Lucidlight extension, Expert Options) — while comm runs,
+      any closed main channel is retried every 2 s: serial USB
+      unplug/replug, dropped TCP client, or a channel that started in the
+      Docklight error state (status 3). Success logs "Reopened <device>".
+      SerialLink now reports its device string even after a failed open.
+- [x] CSV log export (.csv) — strict RFC 4180 table (time, direction,
+      channel, data_hex, data_ascii), quoted/escaped; works for snapshots
+      and live logging (format 4)
 - [x] CSV log export (.csv) — strict RFC 4180 table (time, direction,
       channel, data_hex, data_ascii), quoted/escaped; works for snapshots
       and live logging (format 4)

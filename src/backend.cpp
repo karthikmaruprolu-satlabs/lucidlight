@@ -60,6 +60,7 @@ Backend::Backend(QObject *parent)
             // runningChanged mid-session and must not move the µs baseline.
             // startClock() runs in toggleComm() before start() instead.
             m_repeatClock.start();
+    updateReopenTimer();
             m_nextRepeatAt.clear();
             m_matchers[0].reset();
             m_matchers[1].reset();
@@ -1620,6 +1621,44 @@ int Backend::importSequences(const QString &path) {
     return added.size();
 }
 
+void Backend::setAutoReopen(bool on) {
+    if (on == m_autoReopen)
+        return;
+    m_autoReopen = on;
+    updateReopenTimer();
+    emit autoReopenChanged();
+}
+
+void Backend::updateReopenTimer() {
+    if (m_autoReopen && m_comm->running()) {
+        if (!m_reopenTimer) {
+            m_reopenTimer = new QTimer(this);
+            m_reopenTimer->setInterval(2000);
+            connect(m_reopenTimer, &QTimer::timeout, this,
+                    &Backend::autoReopenCheck);
+        }
+        m_reopenTimer->start();
+        autoReopenCheck();
+    } else if (m_reopenTimer) {
+        m_reopenTimer->stop();
+    }
+}
+
+void Backend::autoReopenCheck() {
+    if (!m_autoReopen || !m_comm->running())
+        return;
+    // Any closed main channel is retried: serial (USB replug), a TCP
+    // client whose peer dropped, or a channel that started in the error
+    // state. SERVER:/listening links report open while listening, so they
+    // are never touched. Failures stay silent — the manager logs "Reopened"
+    // on success only.
+    for (int i = 0; i < 2; ++i) {
+        CommLink *link = m_comm->link(i);
+        if (link && !link->isOpen())
+            m_comm->reopenChannel(i);
+    }
+}
+
 void Backend::setWindowGeometry(const QByteArray &geometry) {
     if (geometry == m_windowGeometry || geometry.isEmpty())
         return;
@@ -1722,6 +1761,7 @@ void Backend::saveSession() {
     state["externalEditor"] = m_externalEditor;
     state["highPriorityTiming"] = m_highPriorityTiming;
     state["windowGeometry"] = QString::fromLatin1(m_windowGeometry.toBase64());
+    state["autoReopen"] = m_autoReopen;
     QJsonArray recent;
     for (const QString &f : m_recentFiles)
         recent.append(f);
@@ -1751,6 +1791,7 @@ bool Backend::loadSession() {
         return false;
     setScriptSource(script);
     m_externalEditor = state.value("externalEditor").toString();
+    m_autoReopen = state.value("autoReopen").toBool();
     if (state.contains("windowGeometry"))
         setWindowGeometry(QByteArray::fromBase64(
             state.value("windowGeometry").toString().toLatin1()));

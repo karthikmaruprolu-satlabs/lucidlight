@@ -46,6 +46,10 @@ public:
     // Restarts with the configuration of the last start; scripts use this.
     Q_INVOKABLE bool restart();
     Q_INVOKABLE bool applySettings(const SerialConfig &a, const SerialConfig &b);
+    // Lucidlight extension: re-open a main channel without stopping the
+    // session (auto-reconnect after a serial USB unplug, or retrying a
+    // channel that started in the error state).
+    Q_INVOKABLE bool reopenChannel(int index);
     Q_INVOKABLE void stop();
 
     // Sends out of the port the current mode transmits on.

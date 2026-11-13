@@ -1,5 +1,7 @@
 #include "commmanager.h"
 
+#include <cstdio>
+
 #include <QDebug>
 
 CommManager::CommManager(QObject *parent) : QObject(parent) {}
@@ -103,6 +105,35 @@ bool CommManager::restart() {
     // Backend callers that changed channel settings pass the fresh configs
     // via start(); restart() replays the configs captured at start time.
     return start(m_lastA, m_lastB);
+}
+
+bool CommManager::reopenChannel(int index) {
+    if (!m_running)
+        return false;
+    const SerialConfig cfg = index == 0 ? m_lastA : m_lastB;
+    if (cfg.device.isEmpty())
+        return false;
+    CommLink *existing = index == 0 ? m_a : m_b;
+    if (existing && existing->isOpen())
+        return true;
+    CommLink *fresh = CommLink::create(cfg.device, this);
+    if (!fresh->open(cfg)) {
+        delete fresh;
+        return false;
+    }
+    if (existing) {
+        existing->close();
+        existing->deleteLater();
+    }
+    if (index == 0) {
+        m_a = fresh;
+        attach(m_a, 0);
+    } else {
+        m_b = fresh;
+        attach(m_b, 1);
+    }
+    emit eventLogged(QObject::tr("Reopened %1").arg(cfg.device));
+    return true;
 }
 
 bool CommManager::applySettings(const SerialConfig &a, const SerialConfig &b) {

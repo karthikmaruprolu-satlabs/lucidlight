@@ -889,6 +889,12 @@ ApplicationWindow {
             checked: backend.highPriorityTiming
             onTriggered: backend.highPriorityTiming = checked
         }
+        MenuItem {
+            text: qsTr("Expert Options: auto-reopen serial port")
+            checkable: true
+            checked: backend.autoReopen
+            onTriggered: backend.autoReopen = checked
+        }
         MenuSeparator {}
         MenuItem {
             text: qsTr("Keyboard Console On") + "  (Ctrl+T)"

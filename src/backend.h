@@ -55,6 +55,10 @@ class Backend : public QObject {
     // Window geometry (x, y, w, h) persisted with the session.
     Q_PROPERTY(QByteArray windowGeometry READ windowGeometry
                WRITE setWindowGeometry NOTIFY stateChanged)
+    // Lucidlight extension: keep retrying a failed serial channel every
+    // 2 s while communication runs (USB unplug/replug).
+    Q_PROPERTY(bool autoReopen READ autoReopen WRITE setAutoReopen
+               NOTIFY autoReopenChanged)
     // Docklight's project option: run the script when the project opens.
     Q_PROPERTY(bool runOnOpen READ runOnOpen WRITE setRunOnOpen NOTIFY stateChanged)
     // Docklight's "additional date/time stamp": period in seconds for the
@@ -95,6 +99,10 @@ public:
     bool applyHighPriority();
     QByteArray windowGeometry() const { return m_windowGeometry; }
     void setWindowGeometry(const QByteArray &geometry);
+    bool autoReopen() const { return m_autoReopen; }
+    void setAutoReopen(bool on);
+    Q_INVOKABLE void autoReopenCheck();   // one poll; also the test hook
+    void updateReopenTimer();
     void setExternalEditor(const QString &cmd);
     Q_INVOKABLE bool editScriptExternally();
     void setScriptSource(const QString &source);
@@ -200,6 +208,7 @@ signals:
     void keyboardConsoleChanged();
     void stateChanged();
     void recentFilesChanged();
+    void autoReopenChanged();
     void scriptChanged();
     void externalEditorChanged();
     void highPriorityTimingChanged();
@@ -260,6 +269,8 @@ private:
     QString m_externalEditor;
     bool m_highPriorityTiming = false;
     QByteArray m_windowGeometry;
+    bool m_autoReopen = false;
+    QTimer *m_reopenTimer = nullptr;
     QFileSystemWatcher *m_scriptWatcher = nullptr;
     QString m_scriptTempFile;
     bool m_runOnOpen = false;
