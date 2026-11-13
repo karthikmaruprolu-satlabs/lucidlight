@@ -1694,8 +1694,15 @@ void Backend::saveProjectTo(const QString &path) {
 }
 
 void Backend::saveSession() {
+    // GenericStateLocation needs Qt >= 6.8; older Qt falls back to the data
+    // location so the session still saves.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericStateLocation)
                         + "/lucidlight";
+#else
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+                        + "/lucidlight";
+#endif
     QDir().mkpath(dir);
     QSaveFile file(dir + "/session.json");
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
@@ -1715,8 +1722,15 @@ void Backend::saveSession() {
 }
 
 bool Backend::loadSession() {
+    // GenericStateLocation needs Qt >= 6.8; older Qt falls back to the data
+    // location so the session still saves.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericStateLocation)
                         + "/lucidlight";
+#else
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+                        + "/lucidlight";
+#endif
     QFile file(dir + "/session.json");
     if (!file.open(QIODevice::ReadOnly))
         return false;
