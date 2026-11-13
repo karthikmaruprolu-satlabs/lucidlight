@@ -180,6 +180,13 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] UNIX socket receive fix — QLocalSocket readyRead was never wired, so
+      UNIX:/UNIXSERVER: links could send but silently never receive (the old
+      test passed on a false positive: its "RX" assertion matched the TX
+      row's hex). QLocalSocket::waitForConnected also left the internal read
+      notifier disabled when the peer accepted later; the client now connects
+      fully asynchronously (Docklight status 2 = waiting until connected)
+      and a genuine RX row is required by the regression test
 - [x] Case-insensitive event procedure names — "function dl_onreceive()" and
       "sub dl_onsend(...)" fire like the exact-case forms (VBScript semantics)
 - [x] Flood-hardening: 5000-message TCP bursts (~2 MB/s) are processed

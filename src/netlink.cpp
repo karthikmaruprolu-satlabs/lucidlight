@@ -2,6 +2,7 @@
 
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QTimer>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QUdpSocket>
@@ -100,6 +101,10 @@ bool NetLink::open(const SerialConfig &config) {
             m_local = client;
             connectSignals();
             setConnected(true);
+            // Data already buffered by the peer arrives before the accept;
+            // deliver it now.
+            if (m_local->bytesAvailable() > 0)
+                handleReadyRead();
         });
         if (!m_localServer->listen(path)) {
             fail(QObject::tr("Cannot listen on %1: %2").arg(path, m_localServer->errorString()));
@@ -120,13 +125,12 @@ bool NetLink::open(const SerialConfig &config) {
         }
         m_local = new QLocalSocket(this);
         connectSignals();
+        // Fully asynchronous connect. Waiting synchronously
+        // (QLocalSocket::waitForConnected) leaves the internal QAbstractSocket's
+        // read notifier disabled when the peer accepts later, so readyRead
+        // never fires afterwards. Like Docklight's TCPCLIENT, the link opens
+        // in the "waiting" state and reports open once connected.
         m_local->connectToServer(path);
-        if (!m_local->waitForConnected(3000)) {
-            fail(QObject::tr("UNIX connect to %1 failed: %2").arg(path, m_local->errorString()));
-            close();
-            return false;
-        }
-        setConnected(true);
         return true;
     }
 
@@ -184,6 +188,10 @@ bool NetLink::open(const SerialConfig &config) {
     return false;
 }
 
+qint64 NetLink::debugLocalBytes() const {
+    return m_local ? m_local->bytesAvailable() : -1;
+}
+
 void NetLink::connectSignals() {
     if (m_tcp) {
         connect(m_tcp, &QAbstractSocket::readyRead, this, &NetLink::handleReadyRead);
@@ -199,6 +207,21 @@ void NetLink::connectSignals() {
             if (m_udp && m_udp->error() != QAbstractSocket::RemoteHostClosedError)
                 fail(m_udp->errorString());
         });
+    }
+    if (m_local) {
+        // QLocalSocket (UNIX client and accepted server connections) needs
+        // its own readyRead wiring; without it the link can send but never
+        // receive.
+        connect(m_local, &QLocalSocket::readyRead, this, &NetLink::handleReadyRead);
+        connect(m_local, &QLocalSocket::connected, this, [this] { setConnected(true); });
+        connect(m_local, &QLocalSocket::disconnected, this,
+                [this] { setConnected(false); });
+        connect(m_local, &QLocalSocket::errorOccurred, this,
+                [this](QLocalSocket::LocalSocketError) {
+                    if (m_local
+                        && m_local->error() != QLocalSocket::PeerClosedError)
+                        fail(m_local->errorString());
+                });
     }
 }
 
@@ -238,6 +261,11 @@ void NetLink::close() {
 }
 
 void NetLink::handleReadyRead() {
+    if (m_local) {
+        while (m_local->bytesAvailable() > 0)
+            emit received(m_local->read(m_local->bytesAvailable()));
+        return;
+    }
     if (m_tcp) {
         while (m_tcp->bytesAvailable() > 0)
             emit received(m_tcp->read(m_tcp->bytesAvailable()));

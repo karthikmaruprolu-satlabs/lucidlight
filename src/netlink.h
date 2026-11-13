@@ -36,6 +36,8 @@ public:
     QString lastError() const override { return m_lastError; }
 
     qint64 write(const QByteArray &data) override;
+    // Debug probe for tests: pending bytes on the local socket, -1 if none.
+    qint64 debugLocalBytes() const;
 
 private:
     void connectSignals();

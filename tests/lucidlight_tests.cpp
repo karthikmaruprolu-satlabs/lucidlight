@@ -1658,10 +1658,22 @@ private slots:
         QVERIFY2(backend.comm()->sendOn(0, QByteArray("hello")),
                  qPrintable(backend.comm()->link(0)->lastError() + '/' + backend.comm()->link(1)->lastError()));
         QTRY_VERIFY_WITH_TIMEOUT(backend.log()->count() >= 3, 2000);
-        QByteArray rx;
-        for (int i = 0; i < backend.log()->count(); ++i)
-            rx.append((backend.log()->hexAt(i) + ' ').toLatin1());
-        QVERIFY2(rx.contains("68 65 6C 6C 6F"), qPrintable(rx));   // "hello"
+        // The client side (channel 2) must receive the bytes as a genuine
+        // RX row - not just the TX row carrying the same hex.
+        QTRY_VERIFY_WITH_TIMEOUT(backend.log()->findNext("68 65 6C 6C 6F", -1) >= 0, 2000);
+        // A genuine RX row on channel B (dir=Rx, channel index 1).
+        QTRY_VERIFY_WITH_TIMEOUT([&] {
+            for (int i = 0; i < backend.log()->count(); ++i) {
+                const auto dir = backend.log()->data(
+                    backend.log()->index(i, 0), CommLog::DirectionRole).toInt();
+                const auto ch = backend.log()->data(
+                    backend.log()->index(i, 0), CommLog::ChannelRole).toInt();
+                if (dir == CommLog::Rx && ch == 1
+                    && backend.log()->hexAt(i).contains("68 65 6C 6C 6F"))
+                    return true;
+            }
+            return false;
+        }(), 2000);
 
         backend.comm()->stop();
         QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(path), 1000);
