@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QProcess>
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QSaveFile>
@@ -188,6 +189,62 @@ void Backend::toggleSnapshot() {
         m_log->setFrozen(false);
     }
     emit stateChanged();
+}
+
+
+void Backend::setExternalEditor(const QString &cmd) {
+    if (m_externalEditor == cmd)
+        return;
+    m_externalEditor = cmd;
+    if (!m_scriptWatcher)
+        m_scriptWatcher = new QFileSystemWatcher(this);
+    if (cmd.isEmpty() && !m_scriptTempFile.isEmpty()) {
+        m_scriptWatcher->removePath(m_scriptTempFile);
+        QFile::remove(m_scriptTempFile);
+        m_scriptTempFile.clear();
+    }
+    emit externalEditorChanged();
+}
+
+bool Backend::editScriptExternally() {
+    if (m_externalEditor.isEmpty()) {
+        emit toast(tr("Set an external editor command first (Project menu)"));
+        return false;
+    }
+    if (!m_scriptWatcher)
+        m_scriptWatcher = new QFileSystemWatcher(this);
+    if (m_scriptTempFile.isEmpty()) {
+        m_scriptTempFile = QDir::tempPath()
+            + "/lucidlight-script."
+            + (scriptSource().contains("/*vbs*/") ? "vbs" : "js");
+        connect(m_scriptWatcher, &QFileSystemWatcher::fileChanged, this,
+                [this](const QString &path) {
+                    QFile f(path);
+                    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        setScriptSource(QString::fromUtf8(f.readAll()));
+                        emit toast(tr("Script reloaded from external editor"));
+                    }
+                });
+    }
+    // Refresh the temp file with the current script content, then watch it
+    // (the file must exist before addPath succeeds).
+    QFile f(m_scriptTempFile);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+        return false;
+    f.write(m_scriptSource.toUtf8());
+    f.close();
+    if (m_scriptWatcher->files().isEmpty())
+        m_scriptWatcher->addPath(m_scriptTempFile);
+    QString cmd = m_externalEditor;
+    cmd.replace("%FILE%", m_scriptTempFile);
+    cmd.replace("%LINE%", "1");
+    // QProcess::startDetached(singleString) is unreliable here; split first.
+    const QStringList args = QProcess::splitCommand(cmd);
+    const bool ok = !args.isEmpty()
+        && QProcess::startDetached(args.first(), args.mid(1));
+    if (!ok)
+        emit toast(tr("Could not start: %1").arg(cmd));
+    return ok;
 }
 
 void Backend::setDialogPause(bool paused) {
@@ -1481,8 +1538,10 @@ void Backend::saveSession() {
     QSaveFile file(dir + "/session.json");
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return;
-    const QJsonObject state =
+    QJsonObject state =
         Project::save(m_comm, m_a, m_b, m_sequences, m_scriptSource, m_log, m_runOnOpen);
+    // Program option (not part of the project file): the external editor.
+    state["externalEditor"] = m_externalEditor;
     file.write(QJsonDocument(state).toJson(QJsonDocument::Compact));
     file.commit();
     setDirty(false);
@@ -1500,6 +1559,7 @@ bool Backend::loadSession() {
     if (!error.isEmpty())
         return false;
     setScriptSource(script);
+    m_externalEditor = state.value("externalEditor").toString();
     setProjectPath(QString());
     setDirty(false);
     return true;

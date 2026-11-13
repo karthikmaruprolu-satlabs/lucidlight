@@ -780,6 +780,16 @@ ApplicationWindow {
         }
         MenuSeparator {}
         MenuItem {
+            text: qsTr("Edit script in external editor")
+            enabled: backend.externalEditor !== ""
+            onTriggered: if (!backend.editScriptExternally()) {}
+        }
+        MenuItem {
+            text: qsTr("Customize / External Editor\u2026")
+            onTriggered: extEditorDialog.open()
+        }
+        MenuSeparator {}
+        MenuItem {
             text: qsTr("Keyboard Console On") + "  (Ctrl+T)"
             checkable: true
             checked: backend.keyboardConsole
@@ -811,6 +821,65 @@ ApplicationWindow {
         MenuItem {
             text: qsTr("Copy data as hex")
             onTriggered: backend.copyToClipboard(backend.log.hexAt(rowMenu.row))
+        }
+    }
+
+    // Docklight's "Customize / External Editor" dialog: a command template
+    // with %FILE% (temp script file) and %LINE% (cursor line) wildcards.
+    Popup {
+        id: extEditorDialog
+        anchors.centerIn: parent
+        width: 440
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        background: Rectangle {
+            color: theme.surface
+            radius: Math.min(10, theme.radius + 4)
+            border.color: Qt.alpha(theme.muted, 0.3)
+        }
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 10
+            Label {
+                text: qsTr("External editor")
+                font.weight: Font.DemiBold
+                font.pixelSize: 15
+                color: theme.bright
+            }
+            Label {
+                text: qsTr("Command template; %FILE% is the temp script file, %LINE% the line number. Empty disables the external editor.")
+                wrapMode: Text.Wrap
+                font.pixelSize: 12
+                color: theme.fg
+                Layout.fillWidth: true
+            }
+            TextField {
+                id: extEditorField
+                Layout.fillWidth: true
+                text: backend.externalEditor
+                placeholderText: qsTr("e.g. kate %FILE% --line %LINE%")
+                onAccepted: {
+                    backend.externalEditor = text;
+                    extEditorDialog.close();
+                }
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                Button {
+                    text: qsTr("Cancel")
+                    flat: true
+                    onClicked: extEditorDialog.close()
+                }
+                Button {
+                    text: qsTr("Save")
+                    highlighted: true
+                    onClicked: {
+                        backend.externalEditor = extEditorField.text;
+                        extEditorDialog.close();
+                    }
+                }
+            }
         }
     }
 

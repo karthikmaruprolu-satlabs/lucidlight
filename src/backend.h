@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
+#include <QFileSystemWatcher>
 
 #include "channelsettings.h"
 #include "commlog.h"
@@ -42,6 +43,9 @@ class Backend : public QObject {
     Q_PROPERTY(PortEnumerator *ports READ ports CONSTANT)
     Q_PROPERTY(PortalPicker *picker READ picker CONSTANT)
     Q_PROPERTY(QString scriptSource READ scriptSource WRITE setScriptSource NOTIFY scriptChanged)
+    // Docklight "Customize / External Editor": command template with %FILE%
+    // and %LINE% wildcards; empty = use the built-in editor.
+    Q_PROPERTY(QString externalEditor READ externalEditor WRITE setExternalEditor NOTIFY externalEditorChanged)
     // Docklight's project option: run the script when the project opens.
     Q_PROPERTY(bool runOnOpen READ runOnOpen WRITE setRunOnOpen NOTIFY stateChanged)
     // Docklight's "additional date/time stamp": period in seconds for the
@@ -70,6 +74,9 @@ public:
     PortEnumerator *ports() const { return m_ports; }
     PortalPicker *picker() const { return m_picker; }
     QString scriptSource() const { return m_scriptSource; }
+    QString externalEditor() const { return m_externalEditor; }
+    void setExternalEditor(const QString &cmd);
+    Q_INVOKABLE bool editScriptExternally();
     void setScriptSource(const QString &source);
     bool runOnOpen() const;
     void setRunOnOpen(bool on);
@@ -160,6 +167,7 @@ signals:
     void keyboardConsoleChanged();
     void stateChanged();
     void scriptChanged();
+    void externalEditorChanged();
     void toast(const QString &text);
     // Blocking script dialogs (DL.MsgBox2 / DL.InputBox2); QML shows the
     // dialog and answers via answerScriptDialog.
@@ -214,6 +222,9 @@ private:
     bool m_dirty = false;
     QString m_projectPath;
     QString m_scriptSource;
+    QString m_externalEditor;
+    QFileSystemWatcher *m_scriptWatcher = nullptr;
+    QString m_scriptTempFile;
     bool m_runOnOpen = false;
     bool m_pendingHighlight = false;
 

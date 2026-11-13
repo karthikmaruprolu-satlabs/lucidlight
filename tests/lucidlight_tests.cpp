@@ -1992,6 +1992,30 @@ private slots:
     }
 
 
+
+    void externalEditorRoundTrip()
+    {
+        // Docklight "Customize / External Editor": the script goes to a temp
+        // file, the external command may modify it, and the change is
+        // reloaded into the built-in editor.
+        Backend backend;
+        backend.setScriptSource("print(1)\n");
+        const QString tmp = QDir::tempPath() + "/lucidlight-script.js";
+        QFile::remove(tmp);
+        // A fake "editor" that appends a comment line to the temp file.
+        backend.setExternalEditor(
+            "sh -c \"sleep 0.3; echo '// edited by external editor' >> %FILE%\"");
+        QVERIFY(backend.editScriptExternally());
+        QTRY_VERIFY_WITH_TIMEOUT(
+            backend.scriptSource().contains("edited by external editor"),
+            5000);
+        QVERIFY(backend.scriptSource().contains("print(1)"));
+        QFile::remove(tmp);
+        // Empty command disables the feature.
+        backend.setExternalEditor("");
+        QVERIFY(!backend.editScriptExternally());
+    }
+
     void snapshotCatchesTriggerSequence()
     {
         // Docklight Snapshot: the window stays hidden while armed; when a
