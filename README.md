@@ -26,7 +26,9 @@ flow, poke the device, automate the whole conversation with a script.
   Contents filter (all / channel 1 / channel 2 / comments), optional
   control-character names (`<CR><LF>`), pause-detection stamps. Freeze the
   view while data keeps flowing, search with glowing matches, copy any line
-  as text or hex, save the whole log.
+  as text or hex, save the whole log, and the **Snapshot** camera button:
+  hide the window while it waits for a trigger sequence, then reveal the
+  buffered data with the trigger mid-window and stop.
 - **Send / receive sequences** — named snippets in Text/Hex/Dec/Binary
   notation with wildcard parameters, function characters (`&` delay, `%`
   break, `!` handshake), **checksum areas** (MOD256, XOR, LRC, CRC-8/16/32,
