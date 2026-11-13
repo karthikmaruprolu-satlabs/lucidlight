@@ -199,6 +199,10 @@ void DLScriptEngine::run(QString code) {
     QJSValue dlValue = m_engine->newQObject(dl);
     m_engine->globalObject().setProperty("DL", dlValue);
 
+    DebugObject *dbg = new DebugObject(this);
+    QJSValue dbgValue = m_engine->newQObject(dbg);
+    m_engine->globalObject().setProperty("Debug", dbgValue);
+
     // print(...) lands in the script output pane, like WScript.Echo.
     m_engine->evaluate(QStringLiteral(
         "function print() { var s = '';"
@@ -1687,6 +1691,39 @@ void DLObject::ShowMessage(const QString &text) {
 
 QString DLObject::GetLastError() const {
     return m_host->m_lastError;
+}
+
+
+// ---- Debug object (manual "Script Debugging") ------------------------------
+void DebugObject::PrintMsg(const QString &msg) {
+    if (m_mode != 1)
+        return;
+    const QString stamp =
+        QDateTime::currentDateTime().toString(QStringLiteral("MM/dd/yyyy HH:mm:ss.zzz"));
+    emit m_host->commentRequested(
+        QStringLiteral("%1 Debug: %2").arg(stamp, msg), false);
+}
+
+void DebugObject::Assert(bool condition) {
+    if (m_mode != 1 || condition)
+        return;
+    m_host->m_lastError = QStringLiteral("Debug: Assert is False");
+    m_host->m_stop = true;
+    m_host->m_failed = true;
+    m_host->m_failMessage = m_host->m_lastError;
+    if (m_host->jsEngine())
+        m_host->jsEngine()->setInterrupted(true);
+}
+
+void DebugObject::Break() {
+    if (m_mode != 1)
+        return;
+    m_host->m_lastError = QStringLiteral("Debug: Break");
+    m_host->m_stop = true;
+    m_host->m_failed = false;
+    m_host->m_quit = true;   // treated like a clean end of the script
+    if (m_host->jsEngine())
+        m_host->jsEngine()->setInterrupted(true);
 }
 
 void DLObject::_print(const QString &text) {

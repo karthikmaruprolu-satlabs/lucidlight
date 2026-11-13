@@ -99,6 +99,7 @@ signals:
 
 private:
     friend class DLObject;
+    friend class DebugObject;
 
     // Parks in a local event loop until the predicate is true, the timeout
     // passes, or a stop is requested. Queued DL_OnReceive events are
@@ -150,6 +151,26 @@ private:
 // Send-family functions accept Lucidlight's project notation; Receive-family
 // functions block the script (not the UI) until the data arrives or the
 // timeout passes, exactly like their Docklight counterparts.
+// Docklight's Debug object: Debug.Mode = 1 enables the debug methods,
+// Debug.PrintMsg adds a stamped debug line, Debug.Assert/Break stop the
+// script like the manual's Script Debugging feature.
+class DebugObject : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(int Mode READ mode WRITE setMode)
+
+public:
+    explicit DebugObject(DLScriptEngine *host) : QObject(host), m_host(host) {}
+    int mode() const { return m_mode; }
+    void setMode(int m) { m_mode = m; }
+    Q_INVOKABLE void PrintMsg(const QString &msg);
+    Q_INVOKABLE void Assert(bool condition);
+    Q_INVOKABLE void Break();
+
+private:
+    DLScriptEngine *m_host;
+    int m_mode = 0;
+};
+
 class DLObject : public QObject {
     Q_OBJECT
 

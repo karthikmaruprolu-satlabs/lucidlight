@@ -2356,6 +2356,38 @@ private slots:
         ::close(master);
     }
 
+    void debugObjectMatchesManual()
+    {
+        // Manual "Debug object / Script Debugging": Debug.Mode = 1 enables
+        // PrintMsg/Assert/Break; with mode 0 the calls do nothing.
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences, nullptr);
+        QStringList notes;
+        bool finishedOk = false;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::commentRequested,
+                [&](const QString &line, bool) { notes.append(line); });
+        connect(&runner, &ScriptRunner::finished,
+                [&](bool ok, const QString &) {
+            finishedOk = ok;
+            loop.quit();
+        });
+        runner.run("Debug.Mode = 1;\n"
+                   "for (var count = 1; count <= 3; ++count)\n"
+                   "  Debug.PrintMsg(\"count = \" + count);\n"
+                   "Debug.Mode = 0;\n"
+                   "Debug.PrintMsg(\"never\");\n"
+                   "Debug.Break();\n"
+                   "DL.AddComment(\"after break\");");
+        loop.exec();
+        QVERIFY(finishedOk);
+        QCOMPARE(notes.size(), 4);
+        QVERIFY(notes.at(0).endsWith("Debug: count = 1"));
+        QVERIFY(notes.at(2).endsWith("Debug: count = 3"));
+        QCOMPARE(notes.at(3), QStringLiteral("after break"));
+    }
+
     void scriptEchoesThroughRealPort()
     {
         char slave[128];

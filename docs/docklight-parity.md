@@ -135,6 +135,12 @@ not source-compatible, but the DL API names and semantics are replicated.
       (serial or network devices; side-channel data flows into the incoming
       path with channel numbers 2..9)
 
+### Debug object (manual "Script Debugging")
+- [x] Debug.Mode = 0/1, Debug.PrintMsg (stamped debug line in the comm
+      window), Debug.Assert (stops the script when false — Docklight waits
+      for a manual Continue; Lucidlight ends the run, documented deviation),
+      Debug.Break
+
 ## VBScript basics (JS equivalents)
 - [x] Conversions Asc/Chr/HexToStr/StrToHex/HexToDec/DecToHex
 - [x] #include directive (script-side file inclusion)

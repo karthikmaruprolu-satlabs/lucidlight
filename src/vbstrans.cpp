@@ -978,13 +978,14 @@ QString Translator::translateStatement(const QString &raw,
                                  ? QString() : bare.captured(3);
         const bool isProc = procs.contains(head, Qt::CaseInsensitive);
         const bool isDl = head.startsWith("DL.", Qt::CaseInsensitive);
+        const bool isDebug = head.startsWith("Debug.", Qt::CaseInsensitive);
         static const QStringList builtins = {
             "MsgBox", "InputBox", "Print", "Echo", "Beep"
         };
         const bool isBuiltin =
             builtins.contains(head, Qt::CaseInsensitive)
             || head.compare("WScript.Echo", Qt::CaseInsensitive) == 0;
-        if ((isProc || isDl || isBuiltin) && !rest.startsWith('=')) {
+        if ((isProc || isDl || isDebug || isBuiltin) && !rest.startsWith('=')) {
             QString call = convertCall(head, rest);
             if (head.compare("MsgBox", Qt::CaseInsensitive) == 0)
                 call.replace(0, 6, "DL.MsgBox2");
