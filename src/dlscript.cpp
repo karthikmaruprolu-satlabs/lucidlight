@@ -487,7 +487,7 @@ bool DLObject::SendSequence(const QJSValue &nameOrIndex, const QString &paramete
         // Syntax 2: custom sequence data.
         m_host->m_sendDone = false;
         emit m_host->sendRequest(-1, parameters, representation, QStringList());
-        m_host->waitUntil([this] { return m_host->m_sendDone; }, 30000);
+        m_host->waitUntil([this] { return m_host->m_sendDone; }, 30000, false);
         return true;
     }
     if (row < 0) {
@@ -508,7 +508,7 @@ bool DLObject::SendSequence(const QJSValue &nameOrIndex, const QString &paramete
             p = p.trimmed();
     }
     emit m_host->sendRequest(row, QString(), representation, paramList);
-    m_host->waitUntil([this] { return m_host->m_sendDone; }, 30000);
+    m_host->waitUntil([this] { return m_host->m_sendDone; }, 30000, false);
     return true;
 }
 
@@ -614,7 +614,7 @@ QJSValue DLObject::Receive(int count, int timeoutMs) {
             QMutexLocker lock(&m_host->m_streamMutex);
             return m_host->m_stream.size() >= count;
         },
-        timeoutMs);
+        timeoutMs, false);
     if (!arrived || m_host->m_stop) {
         m_host->m_lastError = QStringLiteral("Receive timed out");
         return QJSValue(false);
@@ -635,7 +635,7 @@ bool DLObject::ReceiveStr(const QString &text, int timeoutMs) {
             QMutexLocker lock(&m_host->m_streamMutex);
             return m_host->m_stream.indexOf(needle) >= 0;
         },
-        timeoutMs);
+        timeoutMs, false);
     if (!arrived || m_host->m_stop) {
         m_host->m_lastError = QStringLiteral("Receive timed out waiting for %1").arg(text);
         return false;
@@ -685,7 +685,7 @@ QJSValue DLObject::ReceiveHex(const QString &pattern, int timeoutMs) {
                 }
             return false;
         },
-        timeoutMs);
+        timeoutMs, false);
     if (!arrived || m_host->m_stop) {
         m_host->m_lastError = QStringLiteral("Receive timed out waiting for %1").arg(pattern);
         return QJSValue(false);
@@ -780,7 +780,7 @@ int DLObject::WaitForSequence(const QJSValue &nameOrIndex, int maxCounter, int t
             const int count = m_host->callBridge("scriptReceiveCount", {seqId}).toInt();
             return target < 0 ? false : count >= target;
         },
-        timeout);
+        timeout, false);
     int count = hits;
     if (m_host->m_bridge)
         count = qMax(count, m_host->callBridge("scriptReceiveCount", {seqId}).toInt());
@@ -793,7 +793,7 @@ QJSValue DLObject::ReceiveLine(int timeoutMs) {
             QMutexLocker lock(&m_host->m_streamMutex);
             return m_host->m_stream.indexOf('\n') >= 0;
         },
-        timeoutMs);
+        timeoutMs, false);
     if (!arrived || m_host->m_stop) {
         m_host->m_lastError = QStringLiteral("Receive timed out waiting for a line");
         return QJSValue(false);
@@ -902,7 +902,7 @@ QString DLObject::GetDocklightTimeStamp(const QJSValue &dateTime, int millisecon
 }
 
 void DLObject::Wait(int ms) {
-    m_host->waitUntil([] { return false; }, qMax(0, ms));
+    m_host->waitUntil([] { return false; }, qMax(0, ms), false);
 }
 
 void DLObject::Pause(int ms) {
@@ -1290,7 +1290,7 @@ void DLObject::PlaybackLogFile(const QString &filePathName, const QString &dataD
     for (const Entry &entry : entries) {
         const int wait = timeInterval > 0 ? timeInterval : int(entry.at - previous);
         if (wait > 0)
-            m_host->waitUntil([] { return false; }, wait);
+            m_host->waitUntil([] { return false; }, wait, false);
         previous = timeInterval > 0 ? previous + timeInterval : entry.at;
         sendBytes(entry.bytes);
     }
@@ -1342,7 +1342,7 @@ int DLObject::ShellRun(const QString &operation, const QString &file,
 int DLObject::MsgBox2(const QString &prompt, int buttons, const QString &title) {
     m_host->m_dialogDone = false;
     emit m_host->dialogRequest(prompt, buttons, title, false, QString());
-    m_host->waitUntil([this] { return m_host->m_dialogDone; }, -1);
+    m_host->waitUntil([this] { return m_host->m_dialogDone; }, -1, false);
     return m_host->m_dialogResult;
 }
 
@@ -1352,7 +1352,7 @@ QString DLObject::InputBox2(const QString &prompt, const QString &title,
     m_host->m_inputReady = false;
     m_host->m_inputResult = defaultText;
     emit m_host->dialogRequest(prompt, 0, title, true, defaultText);
-    m_host->waitUntil([this] { return m_host->m_dialogDone; }, -1);
+    m_host->waitUntil([this] { return m_host->m_dialogDone; }, -1, false);
     if (!m_host->m_inputReady)
         m_host->m_inputResult = defaultText;
     return m_host->m_inputResult;
