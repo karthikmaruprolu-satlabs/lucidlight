@@ -97,7 +97,32 @@ void CommManager::stop() {
 }
 
 bool CommManager::restart() {
+    // Backend callers that changed channel settings pass the fresh configs
+    // via start(); restart() replays the configs captured at start time.
     return start(m_lastA, m_lastB);
+}
+
+bool CommManager::applySettings(const SerialConfig &a, const SerialConfig &b) {
+    // Like start(), but a failing open keeps the communication running in a
+    // channel-error state, matching Docklight's SetChannelSettings behavior
+    // (GetChannelStatus returns 3 instead of dropping the session).
+    stop();
+    m_lastA = a;
+    m_lastB = b;
+    m_txBytes = 0;
+    m_rxBytes = 0;
+    m_a = CommLink::create(a.device, this);
+    m_b = CommLink::create(b.device, this);
+    attach(m_a, 0);
+    attach(m_b, 1);
+    const bool okA = m_a->open(a);
+    const bool okB = b.device.isEmpty() || m_b->open(b);
+    m_running = true;
+    emit eventLogged(okA && okB ? QObject::tr("Communication started (single port)")
+                                : QObject::tr("Communication started with channel error"));
+    emit countersChanged();
+    emit runningChanged();
+    return okA && okB;
 }
 
 bool CommManager::openSideChannel(int channelNo, const QString &device) {

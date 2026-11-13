@@ -731,6 +731,14 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
         return false;
     }
     // Forms: "DEVICE", "DEVICE:baud,P,D,S[,FLOW[,PEC]]", "baud,P,D,S..."
+    // Network device strings (TCPCLIENT:host:port, UNIXSERVER:/path, ...)
+    // carry colons of their own and must never be split apart.
+    if (CommLink::isNetworkDevice(text)) {
+        target->setDevice(text.trimmed());
+        if (m_comm->running())
+            return m_comm->applySettings(m_a->config(), m_b->config());
+        return true;
+    }
     const int colon = text.indexOf(QLatin1Char(':'));
     QString devicePart, tail;
     if (colon > 0 && !text.left(colon).contains(',')) {
@@ -782,7 +790,7 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
     // they are. A serial device is probed before the settings stick.
     if (CommLink::isNetworkDevice(target->config().device)) {
         if (m_comm->running())
-            m_comm->restart();
+            return m_comm->applySettings(m_a->config(), m_b->config());
         return true;
     }
     // A running link picks the new settings up on restart; test the port.
@@ -790,8 +798,15 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
     if (probe.open(target->config())) {
         probe.close();
         if (m_comm->running())
-            m_comm->restart();
+            return m_comm->applySettings(m_a->config(), m_b->config());
         return true;
+    }
+    // Docklight reports a channel error for a non-existing COM port while
+    // communication is running: apply the settings anyway so the channel
+    // enters the error state and GetChannelStatus returns 3.
+    if (m_comm->running()) {
+        m_comm->applySettings(m_a->config(), m_b->config());
+        return false;
     }
     return false;
 }
@@ -799,12 +814,27 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
 int Backend::scriptChannelStatus(int channel) {
     if (!m_comm->running())
         return 0;
+    // Side channels 3..10 live in their own link table.
+    if (channel >= 3 && channel <= 10) {
+        const CommLink *side = m_comm->sideLink(channel);
+        if (!side)
+            return 0;
+        const QString dev = side->device();
+        if ((dev.startsWith("SERVER:") || dev.startsWith("TCPCLIENT:")
+             || dev.startsWith("UNIXSERVER:") || dev.startsWith("UNIXCLIENT:"))
+            && !side->isOpen())
+            return 2;
+        return side->isOpen() ? 1 : 3;
+    }
     const CommLink *link = m_comm->link(channel == 2 ? 1 : 0);
     if (!link)
         return 3;
-    // A listening TCP server reports "waiting" until a partner connects,
-    // exactly like Docklight's status 2.
-    if (link->device().startsWith("SERVER:") && !link->isOpen())
+    // A listening server or an unconnected client reports "waiting", like
+    // Docklight's status 2.
+    const QString dev = link->device();
+    if ((dev.startsWith("SERVER:") || dev.startsWith("TCPCLIENT:")
+         || dev.startsWith("UNIXSERVER:") || dev.startsWith("UNIXCLIENT:"))
+        && !link->isOpen())
         return 2;
     if (!link->isOpen())
         return 3;

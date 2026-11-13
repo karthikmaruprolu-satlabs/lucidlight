@@ -1658,6 +1658,43 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(path), 1000);
     }
 
+    void channelStatusFollowsDocklightCodes()
+    {
+        // DL.GetChannelStatus semantics from the manual: 0 closed, 1 open,
+        // 2 waiting (server/client), 3 channel error.
+        Backend backend;
+        int masterA = -1;
+        char slaveA[108];
+        masterA = makePty(slaveA, sizeof(slaveA));
+        QVERIFY(masterA >= 0);
+        backend.channelA()->setDevice(slaveA);
+        backend.comm()->setMode(CommManager::Single);
+        // Stopped communication reports 0.
+        QCOMPARE(backend.scriptChannelStatus(1), 0);
+        QVERIFY(backend.comm()->start(backend.channelA()->config(),
+                                      backend.channelB()->config()));
+        QCOMPARE(backend.scriptChannelStatus(1), 1);
+
+        // A non-existing COM port while running puts the channel in error (3).
+        QVERIFY(!backend.scriptSetChannelSettings("COM17:9600,NONE,8,1", 1));
+        QCOMPARE(backend.scriptChannelStatus(1), 3);
+
+        // A listening TCP server reports "waiting for connection" (2).
+        const quint16 port = quint16(50000 + (QCoreApplication::applicationPid() % 5000));
+        QVERIFY(backend.scriptSetChannelSettings(
+            QStringLiteral("SERVER:%1").arg(port), 1));
+        QCOMPARE(backend.scriptChannelStatus(1), 2);
+
+        // Network device strings survive SetChannelSettings unsplit.
+        QCOMPARE(backend.channelA()->config().device,
+                 QStringLiteral("SERVER:%1").arg(port));
+
+        backend.comm()->stop();
+        QCOMPARE(backend.scriptChannelStatus(1), 0);
+        if (masterA >= 0)
+            ::close(masterA);
+    }
+
     void parityDecoderTailAcrossReads()
     {
         // PARMRK escapes can split across read() calls; the decoder must

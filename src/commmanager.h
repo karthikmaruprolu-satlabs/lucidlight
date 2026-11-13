@@ -45,6 +45,7 @@ public:
     bool start(const SerialConfig &a, const SerialConfig &b);
     // Restarts with the configuration of the last start; scripts use this.
     Q_INVOKABLE bool restart();
+    Q_INVOKABLE bool applySettings(const SerialConfig &a, const SerialConfig &b);
     Q_INVOKABLE void stop();
 
     // Sends out of the port the current mode transmits on.
@@ -63,6 +64,9 @@ public:
     Q_INVOKABLE void setRTS(int channel, bool on);
 
     CommLink *link(int channel) { return channel == 0 ? m_a : m_b; }
+
+    // channelNo 3..10 per Docklight numbering; nullptr when not open.
+    CommLink *sideLink(int channelNo) const { return m_side.value(channelNo - 3, nullptr); }
 
 signals:
     void runningChanged();
