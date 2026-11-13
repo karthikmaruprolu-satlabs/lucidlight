@@ -1,4 +1,5 @@
 #include "checksum.h"
+#include <cstdio>
 
 #include <QRegularExpression>
 
@@ -149,7 +150,14 @@ QByteArray Checksum::compute(const Spec &spec, const QByteArray &data) {
     case Spec::Mod65536:
         for (uchar byte : data)
             value = (value + byte) & 0xFFFF;
-        return QByteArray{char((value >> 8) & 0xFF), char(value & 0xFF)};
+        {
+            // Not QByteArray{a, b}: with two chars Qt resolves that to the
+            // (size, fill) constructor, silently dropping the first byte.
+            QByteArray out;
+            out.append(char((value >> 8) & 0xFF));
+            out.append(char(value & 0xFF));
+            return out;
+        }
     case Spec::Lrc:
         for (uchar byte : data)
             value = (value + byte) & 0xFF;

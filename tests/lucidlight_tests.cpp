@@ -799,6 +799,12 @@ private slots:
         // CRC-8 for "123456789" is the classic check value F4.
         QCOMPARE(Checksum::compute("CRC-8", data).toHex().toUpper(),
                  QByteArray("F4"));
+        // MOD65536 is a 16-bit sum: 0x1DD, big-endian bytes 01 DD.
+        QCOMPARE(Checksum::compute("MOD65536", data).toHex().toUpper(),
+                 QByteArray("01DD"));
+        // CRC-7 and CRC-XMODEM check values for "123456789".
+        QCOMPARE(Checksum::compute("CRC-7", data).toHex().toUpper(), QByteArray("00"));
+        QCOMPARE(Checksum::compute("CRC-XMODEM", data).toHex().toUpper(), QByteArray("31C3"));
         // XOR of "123456789": 31^32^...^39
         QCOMPARE(Checksum::compute("XOR", data).at(0), char(0x31 ^ 0x32 ^ 0x33
                      ^ 0x34 ^ 0x35 ^ 0x36 ^ 0x37 ^ 0x38 ^ 0x39));
