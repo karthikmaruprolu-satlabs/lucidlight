@@ -1,4 +1,5 @@
 #include "commlog.h"
+#include "dataformat.h"
 
 #include <QDateTime>
 
@@ -67,6 +68,39 @@ int CommLog::findNext(const QString &text, int fromRow) const {
         const Row &row = m_rows.at(physical);
         return row.text.contains(needle, Qt::CaseInsensitive)
                || row.hex.contains(needle, Qt::CaseInsensitive);
+    };
+    const int start = fromRow + 1;
+    for (int step = 0; step < viewCount; ++step) {
+        const int viewRow = (start + step) % viewCount;
+        if (contains(viewRow))
+            return viewRow;
+    }
+    return -1;
+}
+
+
+int CommLog::findSequence(const QString &text, int fromRow, int format) const {
+    if (text.trimmed().isEmpty() || m_rows.isEmpty())
+        return -1;
+    const auto parsed =
+        DataFormat::parse(text, DataFormat::Format(format % 4));
+    if (!parsed.ok())
+        return -1;
+    const QByteArray needle = parsed.bytes();
+    if (needle.isEmpty())
+        return -1;
+    const int viewCount = filteredCount();
+    if (viewCount == 0)
+        return -1;
+    auto contains = [&](int viewRow) -> int {
+        const int physical = physicalRow(viewRow);
+        if (physical < 0)
+            return false;
+        const Row &row = m_rows.at(physical);
+        if (row.data.isEmpty())
+            return false;
+        const int hit = row.data.indexOf(needle);
+        return hit >= 0;
     };
     const int start = fromRow + 1;
     for (int step = 0; step < viewCount; ++step) {

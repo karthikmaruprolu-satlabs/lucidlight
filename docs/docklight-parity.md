@@ -177,6 +177,14 @@ not source-compatible, but the DL API names and semantics are replicated.
 - [n/a] Docklight HTML output customization, window layout themes
 
 ## Recently closed (0.2.x)
+- [x] External editor (Customize / External Editor) — command template with
+      %FILE%/%LINE% wildcards, temp script file, auto-reload on change via
+      QFileSystemWatcher; menu entries "Edit script in external editor" and
+      "Customize / External Editor…"
+- [x] Find Sequence — the search bar now parses the needle in the currently
+      selected window representation (ASCII/HEX/DEC/Binary, wildcards and
+      [0D]-style bytes included) and matches raw row bytes, like Docklight's
+      Edit > Find Sequence in Communication Window
 - [x] Snapshot — camera toolbar button: hides the communication window while
       armed (log frozen, comm auto-started); when a receive sequence with the
       Trigger option fires, further data is processed until the trigger sits

@@ -459,7 +459,12 @@ ApplicationWindow {
                 font.pixelSize: 12
                 enabled: searchField.text !== ""
                 function doFind() {
-                    const row = backend.log.findNext(searchField.text, backend.log.currentFindRow);
+                    // Docklight "Find Sequence": interpret the needle in the
+                    // representation of the selected window tab (wildcards
+                    // and [0D]-style bytes included).
+                    const row = backend.log.findSequence(
+                        searchField.text, backend.log.currentFindRow,
+                        backend.log.displayFormat);
                     if (row >= 0) {
                         backend.log.currentFindRow = row;
                         commView.positionViewAtIndex(row, ListView.Contain);

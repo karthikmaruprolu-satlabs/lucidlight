@@ -1993,6 +1993,36 @@ private slots:
 
 
 
+
+    void findSequenceRespectsRepresentation()
+    {
+        // Docklight "Find Sequence": the needle is parsed in the selected
+        // representation, so "0D" finds a CR byte via hex notation and
+        // "[0D]" finds it via ASCII notation; plain text matching continues
+        // to work through findNext().
+        Backend backend;
+        backend.log()->append(CommLog::Rx, 0, QByteArray("Ping\r"), false);
+        backend.log()->append(CommLog::Tx, 0, QByteArray("Pong"), false);
+        const auto parsed = DataFormat::parse("72", DataFormat::Format::Hex);
+        qDebug() << "parse ok" << parsed.ok() << parsed.bytes().size()
+                 << parsed.bytes().toHex();
+        qDebug() << "rows" << backend.log()->count()
+                 << backend.log()->rows().at(0).data.toHex();
+        // Hex needle "69" ('i' = 0x69) matches row 0 (Ping).
+        QCOMPARE(backend.log()->findSequence("69", -1, 1), 0);
+        // ASCII needle "[0D]" finds the CR inside row 0's data.
+        QCOMPARE(backend.log()->findSequence("[0D]", -1, 0), 0);
+        // Decimal "80 105" = "Pi" of "Ping" (0x50 0x69).
+        QCOMPARE(backend.log()->findSequence("80 105", -1, 2), 0);
+        // "Pong" (row 1) has no 'i': the search wraps and finds row 0 again
+        // (Docklight's Find Next wraps through the window).
+        QCOMPARE(backend.log()->findSequence("69", 0, 1), 0);
+        // Legacy substring search still works.
+        QCOMPARE(backend.log()->findNext("Pong", -1), 1);
+        // Binary needle "01010000 01101111" = "Po", found in row 1 (Pong).
+        QCOMPARE(backend.log()->findSequence("01010000 01101111", -1, 3), 1);
+    }
+
     void externalEditorRoundTrip()
     {
         // Docklight "Customize / External Editor": the script goes to a temp

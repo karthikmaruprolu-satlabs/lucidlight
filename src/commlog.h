@@ -73,6 +73,10 @@ public:
     // fromRow, wrapping around) whose text or hex data contains the search
     // text case-insensitively, or -1.
     Q_INVOKABLE int findNext(const QString &text, int fromRow) const;
+    // Docklight "Find Sequence": needle parsed in a representation
+    // (0 ASCII, 1 hex, 2 dec, 3 binary) and matched against the row bytes.
+    Q_INVOKABLE int findSequence(const QString &text, int fromRow,
+                                 int format) const;
 
     int currentFindRow() const { return m_currentFindRow; }
     void setCurrentFindRow(int row) {
