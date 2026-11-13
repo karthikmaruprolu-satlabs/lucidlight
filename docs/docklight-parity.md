@@ -177,6 +177,8 @@ not source-compatible, but the DL API names and semantics are replicated.
 - [n/a] Docklight HTML output customization, window layout themes
 
 ## Recently closed (0.2.x)
+- [x] Example projects under examples/ (ping-pong demo, Modbus RTU
+      master/slave pair with CRC areas)
 - [x] External editor (Customize / External Editor) — command template with
       %FILE%/%LINE% wildcards, temp script file, auto-reload on change via
       QFileSystemWatcher; menu entries "Edit script in external editor" and
