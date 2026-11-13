@@ -50,6 +50,39 @@ bool FileLogger::start(const QString &baseFilePath, bool appendData,
     return m_active;
 }
 
+
+bool FileLogger::writeSnapshot(const QVector<CommLog::Row> &rows,
+                               const QString &path, int format,
+                               QChar representation) {
+    const int savedFormat = m_format;
+    m_format = format;
+    File f;
+    f.file = new QFile(path, this);
+    f.representation = QString(representation);
+    const bool ok = f.file->open(QIODevice::WriteOnly | QIODevice::Text);
+    if (!ok) {
+        delete f.file;
+        m_format = savedFormat;
+        return false;
+    }
+    f.stream = new QTextStream(f.file);
+    m_files.append(f);
+    m_active = true;
+    writeHeader(m_files.last(), representation);
+    for (const auto &row : rows) {
+        writeRow(m_files.last(), representation, row.direction, row.channel,
+                 row.data, row.text, row.stampMs, row.highlighted);
+    }
+    writeFooter(m_files.last());
+    f.stream->flush();
+    delete f.stream;
+    f.file->deleteLater();
+    m_files.clear();
+    m_active = false;
+    m_format = savedFormat;
+    return true;
+}
+
 void FileLogger::stop() {
     if (m_active) {
         for (File &f : m_files) {

@@ -1415,6 +1415,23 @@ void Backend::clearLog() {
 void Backend::saveLogTo(const QString &path) {
     if (path.isEmpty())
         return;
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    // Docklight's Save Log also accepts HTML and RTF; replay the buffered
+    // window rows through the FileLogger machinery for those formats.
+    if (suffix == "htm" || suffix == "html" || suffix == "rtf") {
+        static const char reps[] = "AHDB";
+        FileLogger logger;
+        logger.setHtmlStyle(m_logger.htmlStyle());
+        if (!logger.writeSnapshot(
+                m_log->rows(), path, suffix == "rtf" ? 2 : 1,
+                QLatin1Char(reps[int(m_log->displayFormat())]))) {
+            emit toast(tr("Cannot write %1").arg(path));
+            return;
+        }
+        m_log->appendEvent(tr("Log saved to %1").arg(path));
+        emit toast(tr("Log saved"));
+        return;
+    }
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         emit toast(tr("Cannot write %1").arg(path));

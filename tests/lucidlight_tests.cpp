@@ -1995,6 +1995,36 @@ private slots:
 
 
 
+
+    void saveLogSupportsHtmlAndRtf()
+    {
+        // Docklight's Save Communication Window accepts .txt, .htm and .rtf.
+        Backend backend;
+        backend.log()->append(CommLog::Rx, 0, QByteArray("PING"), false);
+        backend.log()->append(CommLog::Tx, 0, QByteArray("ACK"), false);
+        QTemporaryDir dir;
+        backend.saveLogTo(dir.path() + "/window.htm");
+        backend.saveLogTo(dir.path() + "/window.rtf");
+        QFile htm(dir.path() + "/window.htm");
+        QVERIFY(htm.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString html = QString::fromUtf8(htm.readAll());
+        QVERIFY(html.startsWith("<!DOCTYPE html>"));
+        // The snapshot file uses the window's current representation (ASCII
+        // by default, so the data shows as PING / ACK).
+        QVERIFY(html.contains("PING"));
+        QVERIFY(html.contains("ACK"));
+        QFile rtf(dir.path() + "/window.rtf");
+        QVERIFY(rtf.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString rtfText = QString::fromUtf8(rtf.readAll());
+        QVERIFY(rtfText.startsWith("{\\rtf1"));
+        QVERIFY(rtfText.contains("PING") || rtfText.contains("50 49 4E 47"));
+        // Plain text default still works.
+        backend.saveLogTo(dir.path() + "/window.log");
+        QFile txt(dir.path() + "/window.log");
+        QVERIFY(txt.open(QIODevice::ReadOnly | QIODevice::Text));
+        QVERIFY(QString::fromUtf8(txt.readAll()).contains("50 49 4E 47"));
+    }
+
     void htmlLogCarriesCustomizedStyle()
     {
         // Docklight "Customize HTML output": the .htm log gets a full

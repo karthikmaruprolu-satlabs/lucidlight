@@ -29,6 +29,11 @@ public:
     // block of .htm log files. Empty resets to the built-in default.
     void setHtmlStyle(const QString &css) { m_htmlStyle = css; }
     QString htmlStyle() const { return m_htmlStyle; }
+    // Saves a single snapshot file (.htm/.rtf/.txt) replaying buffered rows,
+    // for the GUI "Save communication log" command. representation is one of
+    // "A", "H", "D", "B"; format 0 text, 1 html, 2 rtf.
+    bool writeSnapshot(const QVector<CommLog::Row> &rows, const QString &path,
+                       int format, QChar representation);
 
 public slots:
     // Appends one communication row to every open file.

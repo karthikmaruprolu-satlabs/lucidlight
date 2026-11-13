@@ -186,6 +186,10 @@ not source-compatible, but the DL API names and semantics are replicated.
       %FILE%/%LINE% wildcards, temp script file, auto-reload on change via
       QFileSystemWatcher; menu entries "Edit script in external editor" and
       "Customize / External Editor…"
+- [x] Save communication log in HTML and RTF — the save dialog accepts
+      .htm/.html/.rtf in addition to plain text; the snapshot renders the
+      window's current representation through the same HTML/RTF machinery as
+      the streaming logger
 - [x] Find Sequence — the search bar now parses the needle in the currently
       selected window representation (ASCII/HEX/DEC/Binary, wildcards and
       [0D]-style bytes included) and matches raw row bytes, like Docklight's
