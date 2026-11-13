@@ -133,6 +133,8 @@ with customizable CSS via `DL.SetHtmlStyle(css)`), `.rtf`, and `.md`
 library (`.llseq`) shares all sequences between projects — ids are remapped
 and colliding names get " (2)" suffixes on import. File > Expert Options:
 high priority timing raises scheduler priority best-effort
-(rtkit → sched_setscheduler → nice). Timing display: seconds-only with
+(rtkit → sched_setscheduler → nice); auto-reopen serial port retries a
+closed main channel every 2 s while communication runs (USB replug
+recovery). Timing display: seconds-only with
 microsecond precision when the µs toolbar toggle is on
 (`DL.SetMicroStamps(true)`).
