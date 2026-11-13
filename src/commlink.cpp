@@ -23,13 +23,22 @@ CommLink *CommLink::create(const QString &device, QObject *parent) {
 }
 
 QString CommLink::normalizeDevice(const QString &device) {
+    const QString trimmed = device.trimmed();
     // Docklight device-string compatibility: a bare "host:port" is a TCP
-    // client, e.g. SetChannelSettings "docklight.de:80".
+    // client, e.g. SetChannelSettings "docklight.de:80". Scheme prefixes
+    // (SERVER:, TCP:, UDP:, UNIX..., COM ports) are left untouched.
+    const QString upper = trimmed.toUpper();
+    static const QStringList prefixes = {
+        "SERVER:", "TCP:", "UDP:", "UNIX:", "UNIXSERVER:", "TCPCLIENT:",
+        "UNIXCLIENT:", "COM", "/DEV/", "PIPE:"
+    };
+    for (const QString &prefix : prefixes)
+        if (upper.startsWith(prefix))
+            return device;
     static const QRegularExpression hostPort(
         QStringLiteral("^([^,:\\s]+):(\\d+)$"));
-    const QRegularExpressionMatch m = hostPort.match(device.trimmed());
-    if (m.hasMatch() && !device.trimmed().startsWith(QLatin1String("COM"),
-                                                     Qt::CaseInsensitive))
+    const QRegularExpressionMatch m = hostPort.match(trimmed);
+    if (m.hasMatch())
         return QStringLiteral("TCP:%1:%2").arg(m.captured(1), m.captured(2));
     return device;
 }
