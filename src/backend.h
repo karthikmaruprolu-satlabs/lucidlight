@@ -24,6 +24,9 @@ class Backend : public QObject {
     // While the Send Sequence Parameter dialog is open, Docklight pauses
     // communication: no receive processing and no periodical sends.
     Q_PROPERTY(bool dialogPause WRITE setDialogPause NOTIFY stateChanged)
+    // Docklight's Snapshot: run communication with the window frozen until a
+    // trigger sequence fires, then reveal the buffered data and stop.
+    Q_PROPERTY(bool snapshotArmed READ snapshotArmed NOTIFY stateChanged)
     Q_PROPERTY(bool dirty READ dirty WRITE setDirty NOTIFY stateChanged)
     Q_PROPERTY(QString projectPath READ projectPath WRITE setProjectPath NOTIFY stateChanged)
     Q_PROPERTY(QString commStateText READ commStateText NOTIFY stateChanged)
@@ -144,6 +147,10 @@ public:
     // QML answers a script dialog; value -1 = input box text via textValue.
     Q_INVOKABLE void answerScriptDialog(int value, const QString &textValue);
 
+    // Docklight Snapshot.
+    Q_INVOKABLE void toggleSnapshot();
+    bool snapshotArmed() const { return m_snapshotArmed; }
+
 public slots:
     void scriptDialog(const QString &prompt, int buttons, const QString &title,
                       bool input, const QString &defaultText);
@@ -217,6 +224,10 @@ private:
     QTimer m_clockTimer;
     int m_clockStampInterval = 0;
     bool m_dialogPause = false;
+    bool m_snapshotArmed = false;
+    bool m_snapshotTriggered = false;
+    qint64 m_snapshotRowsBefore = 0;
+    qint64 m_snapshotRowsSeen = 0;
     QVector<QPair<int, QByteArray>> m_heldIncoming;   // seconds, 0 = off
     bool m_keyboardConsole = false;
     QHash<int, qint64> m_nextRepeatAt;

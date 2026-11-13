@@ -168,6 +168,28 @@ void Backend::setScriptSource(const QString &source) {
 // Traffic
 // ---------------------------------------------------------------------------
 
+void Backend::toggleSnapshot() {
+    if (!m_snapshotArmed) {
+        // Arm: freeze the window and make sure communication runs.
+        m_snapshotArmed = true;
+        m_snapshotTriggered = false;
+        m_snapshotRowsBefore = 0;
+        m_snapshotRowsSeen = 0;
+        m_log->setFrozen(true);
+        m_log->clear();
+        if (!m_comm->running()) {
+            if (m_comm->start(m_a->config(), m_b->config()))
+                m_log->startClock();
+        }
+        m_log->appendEvent(tr("Snapshot armed — waiting for the trigger"));
+    } else {
+        m_snapshotArmed = false;
+        m_snapshotTriggered = false;
+        m_log->setFrozen(false);
+    }
+    emit stateChanged();
+}
+
 void Backend::setDialogPause(bool paused) {
     if (m_dialogPause == paused)
         return;
@@ -183,6 +205,23 @@ void Backend::setDialogPause(bool paused) {
 }
 
 void Backend::handleIncoming(int channel, const QByteArray &data) {
+    if (m_snapshotArmed) {
+        ++m_snapshotRowsSeen;
+        // Once enough data arrived after the trigger that it sits roughly in
+        // the middle of the buffered window: reveal and stop (Docklight's
+        // "further data is processed, until the trigger sequence is located
+        // roughly in the middle of the communication window").
+        if (m_snapshotTriggered
+            && m_snapshotRowsSeen - m_snapshotRowsBefore >= m_snapshotRowsBefore) {
+            m_snapshotArmed = false;
+            m_snapshotTriggered = false;
+            m_log->setFrozen(false);
+            m_log->appendEvent(
+                tr("Snapshot triggered — communication stopped"));
+            m_comm->stop();
+            emit stateChanged();
+        }
+    }
     if (m_dialogPause && QThread::currentThread() == thread()) {
         m_heldIncoming.append({channel, data});
         return;
@@ -227,6 +266,10 @@ void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token
             engine->queueReceiveEvent(seq.id, i, seq.name, received,
                                       channel + 1,
                                       QDateTime::currentMSecsSinceEpoch());
+        }
+        if (m_snapshotArmed && seq.trigger && !m_snapshotTriggered) {
+            m_snapshotTriggered = true;
+            m_snapshotRowsBefore = m_snapshotRowsSeen;
         }
         applyTrigger(&seq, received, channel);
         break;

@@ -1991,6 +1991,71 @@ private slots:
         ::close(master);
     }
 
+
+    void snapshotCatchesTriggerSequence()
+    {
+        // Docklight Snapshot: the window stays hidden while armed; when a
+        // receive sequence with a trigger fires, the buffered data is shown
+        // and communication stops automatically.
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        backend.sequences()->add(QVariantMap{{"name", "Greet"}, {"isSend", true},
+                                             {"format", 0}, {"data", "Hello"}});
+        // Receive sequence with the trigger flag on.
+        backend.sequences()->add(
+            QVariantMap{{"name", "Echo"}, {"isSend", false}, {"format", 0},
+                        {"data", "Hello"}, {"trigger", true},
+                        {"comment", "Snapshot!"}});
+
+        QVERIFY(backend.snapshotArmed() == false);
+        backend.toggleSnapshot();
+        QVERIFY(backend.snapshotArmed());
+        QVERIFY(backend.running());
+        QTRY_VERIFY_WITH_TIMEOUT(backend.log()->frozen(), 2000);
+        const int hiddenCount = backend.log()->count();
+        QThread::msleep(250);
+        // Still hidden after more traffic would arrive: write and pump.
+        QVERIFY(::write(master, "noise", 5) == 5);
+        QThread::msleep(150);
+        for (int i = 0; i < 10; ++i) {
+            QCoreApplication::processEvents();
+            QThread::msleep(30);
+        }
+        // The trigger has not fired yet (nothing matching was sent).
+        QVERIFY(backend.snapshotArmed());
+        QVERIFY(backend.log()->count() == hiddenCount);
+
+        // Fire the trigger: send Hello; the loopback echoes it back.
+        backend.sendSequence(0);
+        // Echo every TX back plus extra noise, so the trigger ends up
+        // roughly in the middle of the buffered window.
+        for (int i = 0; i < 40 && backend.snapshotArmed(); ++i) {
+            QCoreApplication::processEvents();
+            char buf[256];
+            ssize_t n;
+            while ((n = ::read(master, buf, sizeof(buf))) > 0)
+                QCOMPARE(::write(master, buf, n), n);   // echo
+            QVERIFY(::write(master, "noise", 5) == 5);
+            QThread::msleep(40);
+        }
+        QVERIFY(!backend.snapshotArmed());
+        // The buffered data is now visible and comm stopped.
+        QVERIFY(!backend.log()->frozen());
+        QTRY_VERIFY_WITH_TIMEOUT(!backend.running(), 3000);
+        QStringList texts;
+        for (int i = 0; i < backend.log()->count(); ++i)
+            texts << backend.log()->rows()[i].text;
+        const QString all = texts.join('\n');
+        QVERIFY(all.contains("Hello"));
+        QVERIFY(all.contains("Snapshot!"));
+        QVERIFY(all.contains("triggered"));
+        ::close(master);
+    }
+
     void sequenceRepeatRecomputesChecksum()
     {
         // Docklight's periodic send recalculates checksum areas on every

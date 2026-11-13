@@ -378,6 +378,19 @@ ApplicationWindow {
                 ToolTip.text: qsTr("Time since the previous line")
                 ToolTip.delay: 600
             }
+            // Docklight's Snapshot: hide everything until a trigger
+            // sequence fires, then reveal the buffered window and stop.
+            ToolButton {
+                id: snapshotButton
+                checkable: true
+                checked: backend.snapshotArmed
+                text: "📷"
+                font.pixelSize: 13
+                onClicked: backend.toggleSnapshot()
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Snapshot — hide the window until a trigger sequence fires, then show the buffered data and stop")
+                ToolTip.delay: 600
+            }
             ToolButton {
                 id: freezeButton
                 checkable: true

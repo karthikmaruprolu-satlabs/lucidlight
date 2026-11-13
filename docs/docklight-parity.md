@@ -177,6 +177,12 @@ not source-compatible, but the DL API names and semantics are replicated.
 - [n/a] Docklight HTML output customization, window layout themes
 
 ## Recently closed (0.2.x)
+- [x] Snapshot — camera toolbar button: hides the communication window while
+      armed (log frozen, comm auto-started); when a receive sequence with the
+      Trigger option fires, further data is processed until the trigger sits
+      roughly in the middle of the buffered window, then the window is
+      revealed, an event notes the trigger, and communication stops
+      (regression test snapshotCatchesTriggerSequence)
 - [x] Data Forwarding (Monitor mode expert option) — RX on one port is re-transmitted on the opposite port's TX line, on by default, toggle in the settings popup, persisted in the project
 - [x] Control character shortcuts in the sequence editor — Ctrl+Enter inserts <CR>, Ctrl+Shift+Enter inserts <LF>
 - [x] #include directive — script preprocessor splices .pts/.js files, relative to the script's directory then cwd, cycle-guarded
