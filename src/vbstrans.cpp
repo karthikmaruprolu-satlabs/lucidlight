@@ -550,6 +550,7 @@ public:
 
 private:
     QVector<Block> m_stack;
+    QStringList m_withVars;   // active With object variables (innermost last)
     QStringList m_out;
     QStringList *m_warnings = nullptr;
 
@@ -936,14 +937,37 @@ QString Translator::translateStatement(const QString &raw,
     // With obj ... End With.
     if (lower.startsWith("with ")) {
         push(Block::With);
-        return QStringLiteral("var _with%1 = (%2); {")
-            .arg(QString::number(m_stack.size() - 1),
-                 convertExpression(line.mid(5)));
+        const QString withVar = QStringLiteral("_with%1").arg(m_stack.size() - 1);
+        m_withVars.append(withVar);
+        return QStringLiteral("var %1 = (%2); {").arg(withVar,
+                                                      convertExpression(line.mid(5)));
     }
     if (lower.startsWith("end with")) {
-        if (topKind() == Block::With)
+        if (topKind() == Block::With) {
+            if (!m_withVars.isEmpty())
+                m_withVars.removeLast();
             return pop() + "  // End With";
+        }
         return "//" + line;
+    }
+
+    // ".member ..." inside a With block refers to the with variable.
+    if (line.startsWith('.') && !m_withVars.isEmpty()) {
+        const QString withVar = m_withVars.last();
+        static const QRegularExpression memberRe(
+            QStringLiteral("^\\.([A-Za-z_]\\w*)(\\s+(.*))?$"));
+        const QRegularExpressionMatch mm = memberRe.match(line);
+        if (mm.hasMatch() && !mm.captured(3).isNull()) {
+            if (mm.captured(3).trimmed().startsWith('=')) {
+                return withVar + QLatin1Char('.') + mm.captured(1) + " = "
+                    + convertExpression(mm.captured(3).trimmed().mid(1)) + ";";
+            }
+            const QString call = convertCall(withVar + QLatin1Char('.')
+                                                 + mm.captured(1),
+                                             mm.captured(3));
+            return call + ";";
+        }
+        return convertExpression(withVar + line) + ";";
     }
 
     // Assignment or call.
