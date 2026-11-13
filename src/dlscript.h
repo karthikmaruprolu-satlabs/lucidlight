@@ -184,6 +184,9 @@ public:
     // returns immediately; the dispatched script lives in its own worker
     // thread sharing the communication channels and sequences.
     Q_INVOKABLE bool Dispatch(const QString &scriptFilePathName);
+    // Lucidlight extension: toggle the Modbus RTU log decoder at runtime.
+    Q_INVOKABLE void SetModbusDecode(bool on);
+    Q_INVOKABLE bool GetModbusDecode() const;
     Q_INVOKABLE bool IsCommRunning() const;
     Q_INVOKABLE bool SetCommMode(int mode);
     Q_INVOKABLE void ClearCommWindows();

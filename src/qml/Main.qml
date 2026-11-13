@@ -901,6 +901,12 @@ ApplicationWindow {
             checked: backend.autoReopen
             onTriggered: backend.autoReopen = checked
         }
+        MenuItem {
+            text: qsTr("Decode Modbus RTU in log")
+            checkable: true
+            checked: backend.modbusDecode
+            onTriggered: backend.modbusDecode = checked
+        }
         MenuSeparator {}
         MenuItem {
             text: qsTr("Keyboard Console On") + "  (Ctrl+T)"

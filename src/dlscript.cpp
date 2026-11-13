@@ -438,6 +438,14 @@ bool DLObject::StartCommunication() {
     return m_host->m_comm->running();
 }
 
+void DLObject::SetModbusDecode(bool on) {
+    m_host->callBridge("scriptSetModbusDecode", {on});
+}
+
+bool DLObject::GetModbusDecode() const {
+    return m_host->callBridge("scriptGetModbusDecode", {}).toBool();
+}
+
 bool DLObject::Dispatch(const QString &scriptFilePathName) {
     if (scriptFilePathName.trimmed().isEmpty()) {
         m_host->m_lastError = QStringLiteral("Dispatch: empty script path");

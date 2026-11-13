@@ -13,6 +13,7 @@ HEADERS += \
     src/portenumerator.h \
     src/dataformat.h \
     src/checksum.h \
+    src/decoder.h \
     src/filelogger.h \
     src/commlog.h \
     src/commmanager.h \
@@ -35,6 +36,7 @@ SOURCES += \
     src/portenumerator.cpp \
     src/dataformat.cpp \
     src/checksum.cpp \
+    src/decoder.cpp \
     src/vbstrans.cpp \
     src/filelogger.cpp \
     src/commlog.cpp \

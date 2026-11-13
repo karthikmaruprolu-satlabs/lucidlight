@@ -16,6 +16,7 @@
 
 #include "backend.h"
 #include "checksum.h"
+#include "decoder.h"
 #include "vbstrans.h"
 #include "commmanager.h"
 #include "dataformat.h"
@@ -2019,6 +2020,54 @@ private slots:
 
 
 
+
+
+    void modbusDecodeAnnotation()
+    {
+        // A valid Modbus RTU response annotated under its RX row; a broken
+        // CRC frame is left unannotated.
+        Backend backend;
+        backend.setModbusDecode(true);
+        // Build a real FC=03 response: addr=1, fc=3, byteCount=2,
+        // regs [0x01F4 (500), 0x00C8 (200)], CRC-16/MODBUS appended.
+        QByteArray frame;
+        frame.append(char(0x01));
+        frame.append(char(0x03));
+        frame.append(char(0x04));        // byteCount: two 16-bit registers
+        frame.append(char(0x01)); frame.append(char(0xF4));
+        frame.append(char(0x00)); frame.append(char(0xC8));
+        // Independent Modbus CRC (poly 0xA001, init 0xFFFF), wire order:
+        // low byte first. The Checksum engine reports the numeric CRC
+        // big-endian (CalcChecksum semantics), so build the wire bytes here.
+        quint16 crcValue = 0xFFFF;
+        for (uchar byte : frame) {
+            crcValue ^= byte;
+            for (int bit = 0; bit < 8; ++bit)
+                crcValue = (crcValue & 1) ? quint16((crcValue >> 1) ^ 0xA001)
+                                          : quint16(crcValue >> 1);
+        }
+        frame.append(char(crcValue & 0xFF));
+        frame.append(char(crcValue >> 8));
+        QVERIFY(!ModbusDecoder::tryDecode(frame).isEmpty());
+        // Drive the real receive pipeline (the decode hook lives there).
+        QMetaObject::invokeMethod(&backend, "handleIncoming",
+                                  Q_ARG(int, 0), Q_ARG(QByteArray, frame));
+        // The window shows the raw frame plus the decoded comment attached.
+        QTRY_VERIFY_WITH_TIMEOUT(backend.log()->count() >= 2, 2000);
+        const QString last = backend.log()->textAt(backend.log()->count() - 1);
+        QVERIFY(last.contains("MODBUS addr=1 FC=3"));
+        QVERIFY(last.contains("regs: 500 200"));
+        QVERIFY(last.contains("CRC ok"));
+
+        // Corrupt one byte -> CRC mismatch -> no annotation.
+        QByteArray broken = frame;
+        broken[3] = char(0xF5);
+        QMetaObject::invokeMethod(&backend, "handleIncoming",
+                                  Q_ARG(int, 0), Q_ARG(QByteArray, broken));
+        QTRY_VERIFY_WITH_TIMEOUT(backend.log()->count() >= 3, 2000);
+        const QString lastRow = backend.log()->textAt(backend.log()->count() - 1);
+        QVERIFY(!lastRow.contains("MODBUS"));
+    }
 
     void dispatchRunsParallelScripts()
     {

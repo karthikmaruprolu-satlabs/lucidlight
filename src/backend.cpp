@@ -1,5 +1,7 @@
 #include "backend.h"
 
+#include "decoder.h"
+
 #include <QDBusInterface>
 #include <QDBusReply>
 #include <sched.h>
@@ -306,6 +308,16 @@ void Backend::handleIncoming(int channel, const QByteArray &data) {
     m_log->append(CommLog::Rx, channel, data, highlighted);
     m_logger.onRow(CommLog::Rx, channel, data, QString(),
                    QDateTime::currentMSecsSinceEpoch(), highlighted);
+    // Protocol decode: a valid Modbus RTU frame gets a one-line annotation
+    // attached directly under the received row.
+    if (m_modbusDecode && channel >= 0 && channel < 2) {
+        const QString decoded = ModbusDecoder::tryDecode(data);
+        if (!decoded.isEmpty()) {
+            m_log->appendComment(decoded, true);
+            m_logger.onRow(CommLog::Comment, channel, QByteArray(), decoded,
+                           QDateTime::currentMSecsSinceEpoch(), false);
+        }
+    }
 }
 
 void Backend::handleTransmitted(int channel, const QByteArray &data) {
@@ -1342,6 +1354,10 @@ QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {
     if (name == "scriptStartLogging")
         return scriptStartLogging(arg(0).toString(), arg(1).toBool(), arg(2).toString(),
                                   arg(3).toInt(), arg(4).toBool());
+    if (name == "scriptSetModbusDecode")
+        setModbusDecode(arg(0).toBool());
+    if (name == "scriptGetModbusDecode")
+        return m_modbusDecode;
     if (name == "scriptDispatch")
         return scriptDispatch(arg(0).toString());
     if (name == "scriptStopLogging") {
@@ -1687,6 +1703,13 @@ void Backend::updateReopenTimer() {
     }
 }
 
+void Backend::setModbusDecode(bool on) {
+    if (on == m_modbusDecode)
+        return;
+    m_modbusDecode = on;
+    emit stateChanged();
+}
+
 void Backend::autoReopenCheck() {
     if (!m_autoReopen || !m_comm->running())
         return;
@@ -1805,6 +1828,7 @@ void Backend::saveSession() {
     state["highPriorityTiming"] = m_highPriorityTiming;
     state["windowGeometry"] = QString::fromLatin1(m_windowGeometry.toBase64());
     state["autoReopen"] = m_autoReopen;
+    state["modbusDecode"] = m_modbusDecode;
     QJsonArray recent;
     for (const QString &f : m_recentFiles)
         recent.append(f);
@@ -1835,6 +1859,7 @@ bool Backend::loadSession() {
     setScriptSource(script);
     m_externalEditor = state.value("externalEditor").toString();
     m_autoReopen = state.value("autoReopen").toBool();
+    m_modbusDecode = state.value("modbusDecode").toBool();
     if (state.contains("windowGeometry"))
         setWindowGeometry(QByteArray::fromBase64(
             state.value("windowGeometry").toString().toLatin1()));

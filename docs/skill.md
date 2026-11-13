@@ -82,6 +82,8 @@ DL.ReceiveHex("AA ?? 55", 1000);      // matched bytes as hex, or false
 DL.WaitForSequence("Ack", 1000);      // true when the named receive sequence matches
 DL.Dispatch("helper.js");             // run another script in parallel
                                       // (own thread, shared comm; max 8)
+DL.SetModbusDecode(true);             // annotate valid Modbus RTU frames
+                                      // inline in the log (FC, addr, regs)
 DL.Wait(250); DL.Pause();
 DL.Comment("note"); DL.ClearComm(); DL.ShowMessage("hello");
 DL.HexToStr(h); DL.StrToHex(s); DL.HexToDec(h); DL.DecToHex(n); DL.Asc(c); DL.Chr(n);

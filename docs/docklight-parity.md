@@ -180,6 +180,15 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] Modbus RTU log decoder (Lucidlight extension) — when enabled
+      (File > Decode Modbus RTU in log, or DL.SetModbusDecode), any
+      received frame with a valid CRC-16/MODBUS is annotated inline:
+      "MODBUS addr=1 FC=3 read-holding-regs 2 regs: 1000 1010 CRC ok".
+      Requests, responses, writes and exception frames are decoded;
+      non-Modbus traffic is left untouched. Note: send-sequence CRCs need
+      the "L" modifier (CRC-MODBUS L) for the real Modbus wire order
+      (LSB first), exactly as in Docklight — the default checksum byte
+      order is MSB first, per the Checksum Specification manual page.
 - [x] DL.Dispatch (Docklight dispatching) — run another script file in
       parallel; each dispatched script lives in its own worker thread
       sharing the comm channels and sequence model (up to 8 concurrent).

@@ -59,6 +59,9 @@ class Backend : public QObject {
     // 2 s while communication runs (USB unplug/replug).
     Q_PROPERTY(bool autoReopen READ autoReopen WRITE setAutoReopen
                NOTIFY autoReopenChanged)
+    // Lucidlight extension: annotate valid Modbus RTU frames in the log.
+    Q_PROPERTY(bool modbusDecode READ modbusDecode WRITE setModbusDecode
+               NOTIFY stateChanged)
     // Docklight's project option: run the script when the project opens.
     Q_PROPERTY(bool runOnOpen READ runOnOpen WRITE setRunOnOpen NOTIFY stateChanged)
     // Docklight's "additional date/time stamp": period in seconds for the
@@ -105,6 +108,8 @@ public:
     bool autoReopen() const { return m_autoReopen; }
     void setAutoReopen(bool on);
     Q_INVOKABLE void autoReopenCheck();   // one poll; also the test hook
+    bool modbusDecode() const { return m_modbusDecode; }
+    void setModbusDecode(bool on);
     void updateReopenTimer();
     void setExternalEditor(const QString &cmd);
     Q_INVOKABLE bool editScriptExternally();
@@ -274,6 +279,7 @@ private:
     bool m_highPriorityTiming = false;
     QByteArray m_windowGeometry;
     bool m_autoReopen = false;
+    bool m_modbusDecode = false;
     QTimer *m_reopenTimer = nullptr;
     QFileSystemWatcher *m_scriptWatcher = nullptr;
     QString m_scriptTempFile;
