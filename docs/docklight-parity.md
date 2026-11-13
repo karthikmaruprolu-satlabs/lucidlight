@@ -170,3 +170,9 @@ not source-compatible, but the DL API names and semantics are replicated.
 - [x] #include directive — script preprocessor splices .pts/.js files, relative to the script's directory then cwd, cycle-guarded
 - [x] Keyboard Console — Tools menu toggle (Ctrl+T), Send/Receive mode only; typed keys transmit directly, Enter = CR+LF, ESC = 0x1B, Ctrl+V sends clipboard (1024-char cap)
 - [x] DL.SetWindowOutput — alias of SetUserOutput with full signature; RTF input stripped to plain text; \u0001CLEAR marker clears the output pane (also fixed a C++ escape bug that broke the marker)
+- [x] Deep-audit round 4 (script-level verification against the manual):
+  - MOD65536 returned one byte instead of two — `QByteArray{char,char}` resolves to the (size,fill) constructor in Qt 6.12, silently dropping the first byte; all eight predefined CRCs plus MOD256/XOR/LRC now verified against the manual's "123456789" check values
+  - DL.ConvertSequenceData: VBScript-style float output ("1.234567", "9.87987987987E+53"), "B" representation no longer parsed as decimal, decimal results padded to three digits ("103 154 149 160 081 161 036 075"); every manual example now reproduced exactly (regression test)
+  - DL.GetChannelStatus: 0 closed / 1 open / 2 waiting (TCP & UNIX servers and clients) / 3 channel error (bad COM port after SetChannelSettings); side channels 3-10 supported
+  - DL.SetChannelSettings no longer splits network device strings ("TCP:host:port") at the first colon; a failing port change keeps the session alive in the error state like Docklight
+  - Periodic send (Repeat) rebuilds the sequence with wildcard parameters and checksum areas on every transmission, exactly like a manual send; the sequence dialog now takes seconds (0.01-9999) like Docklight's "Send periodically"
