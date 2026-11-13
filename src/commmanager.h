@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE bool send(const QByteArray &data);
     // Direct writes for scripted pin-and-break games; bypasses mode routing.
     Q_INVOKABLE bool sendOn(int channel, const QByteArray &data);
+    Q_INVOKABLE bool sendOnEx(int channel, const QByteArray &data, bool log);
     Q_INVOKABLE void sendBreak(int durationMs);
 
     // Side channels 3..10 (stored as indices 2..9), the Docklight scripting

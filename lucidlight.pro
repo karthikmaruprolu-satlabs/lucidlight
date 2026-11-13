@@ -35,6 +35,7 @@ SOURCES += \
     src/portenumerator.cpp \
     src/dataformat.cpp \
     src/checksum.cpp \
+    src/vbstrans.cpp \
     src/filelogger.cpp \
     src/commlog.cpp \
     src/commmanager.cpp \

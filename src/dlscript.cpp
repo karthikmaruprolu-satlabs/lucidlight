@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QRegularExpression>
 #include <cmath>
+#include <cstdio>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -16,6 +17,7 @@
 #include "backend.h"
 #include "checksum.h"
 #include "commmanager.h"
+#include "vbstrans.h"
 
 namespace {
 // Blocking DL calls park the worker in this loop, so queued cross-thread
@@ -140,7 +142,21 @@ bool DLScriptEngine::waitUntil(const std::function<bool()> &predicate, int timeo
     return true;
 }
 
-void DLScriptEngine::run(const QString &code) {
+void DLScriptEngine::run(QString code) {
+    // Docklight scripts are VBScript; translate before running on the
+    // JavaScript engine. Warnings about untranslated constructs surface in
+    // the script output.
+    QString effective = code;
+    if (VbsTrans::looksLikeVbScript(effective)) {
+        QStringList vbsWarnings;
+        effective = VbsTrans::toJs(effective, &vbsWarnings);
+        for (const QString &w : vbsWarnings)
+            emit outputLine(QStringLiteral("[vbs] not translated: %1").arg(w), true);
+        if (qEnvironmentVariableIsSet("LUCID_DUMP_VBS"))
+            fprintf(stderr, "---- transpiled ----\n%s\n----------------\n",
+                    effective.toUtf8().constData());
+    }
+    code = effective;
     m_stop = false;
     m_broken = false;
     m_failed = false;
@@ -176,6 +192,112 @@ void DLScriptEngine::run(const QString &code) {
     m_engine->evaluate(QStringLiteral(
         "function FileInput(path) { return DL._openInput(path); }"
         "function FileOutput(path, append) { return DL._openOutput(path, append === true); }"));
+
+    // VBScript runtime library: the date/time, string, conversion and math
+    // functions the Docklight manual samples rely on.
+    m_engine->evaluate(QStringLiteral(
+        "var _DateCtor = Date;"
+        "function _asDate(d) { if (d === undefined || d === null) return new _DateCtor();"
+        "  if (d instanceof _DateCtor) return d; var p = new _DateCtor(d);"
+        "  if (isNaN(p.getTime())) throw new Error('Type mismatch: not a date'); return p; }"
+        "function Now() { return new _DateCtor(); }"
+        "function _Date() { var d = new _DateCtor(); d.setHours(0, 0, 0, 0); return d; }"
+        "function _Time() { return new _DateCtor(); }"
+        "function VBDate() { return _Date(); }"
+        "function VBTime() { return _Time(); }"
+        "function Timer() { var d = new _DateCtor();"
+        "  return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()"
+        "         + d.getMilliseconds() / 1000; }"
+        "function Year(d) { return _asDate(d).getFullYear(); }"
+        "function Month(d) { return _asDate(d).getMonth() + 1; }"
+        "function Day(d) { return _asDate(d).getDate(); }"
+        "function Hour(d) { return _asDate(d).getHours(); }"
+        "function Minute(d) { return _asDate(d).getMinutes(); }"
+        "function Second(d) { return _asDate(d).getSeconds(); }"
+        "function DateSerial(y, m, d) { return new _DateCtor(y, m - 1, d); }"
+        "function TimeSerial(h, m, s) { var d = new _DateCtor(); d.setHours(h, m, s, 0); return d; }"
+        "function Weekday(d) { return _asDate(d).getDay() + 1; }"
+        "var _dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];"
+        "var _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July',"
+        "                   'August', 'September', 'October', 'November', 'December'];"
+        "function WeekdayName(w, abbrev) { var n = _dayNames[(w - 1) % 7];"
+        "  return abbrev ? n.substr(0, 3) : n; }"
+        "function MonthName(m, abbrev) { var n = _monthNames[(m - 1) % 12];"
+        "  return abbrev ? n.substr(0, 3) : n; }"
+        "function DateAdd(interval, number, date) { var d = _asDate(date); var n = Number(number);"
+        "  switch (String(interval).toLowerCase()) {"
+        "    case 'yyyy': d.setFullYear(d.getFullYear() + n); break;"
+        "    case 'q': d.setMonth(d.getMonth() + 3 * n); break;"
+        "    case 'm': d.setMonth(d.getMonth() + n); break;"
+        "    case 'y': case 'd': case 'w': d.setDate(d.getDate() + n); break;"
+        "    case 'ww': d.setDate(d.getDate() + 7 * n); break;"
+        "    case 'h': d.setHours(d.getHours() + n); break;"
+        "    case 'n': d.setMinutes(d.getMinutes() + n); break;"
+        "    case 's': d.setSeconds(d.getSeconds() + n); break; }"
+        "  return d; }"
+        "function DateDiff(interval, d1, d2) { var a = _asDate(d1), b = _asDate(d2);"
+        "  switch (String(interval).toLowerCase()) {"
+        "    case 'yyyy': return b.getFullYear() - a.getFullYear();"
+        "    case 'm': return (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();"
+        "    case 'd': case 'y': case 'w': return Math.floor((b - a) / 86400000);"
+        "    case 'ww': return Math.floor((b - a) / 604800000);"
+        "    case 'h': return Math.floor((b - a) / 3600000);"
+        "    case 'n': return Math.floor((b - a) / 60000);"
+        "    case 's': return Math.floor((b - a) / 1000); }"
+        "  return 0; }"
+        "function FormatDateTime(d, style) { var p = _asDate(d);"
+        "  var _2 = function (v) { return (v < 10 ? '0' : '') + v; };"
+        "  style = style === undefined ? 0 : style;"
+        "  var md = (p.getMonth() + 1) + '/' + p.getDate() + '/' + p.getFullYear();"
+        "  var h12 = p.getHours() % 12; if (h12 === 0) h12 = 12;"
+        "  var hm = _2(h12) + ':' + _2(p.getMinutes()) + ':' + _2(p.getSeconds())"
+        "           + (p.getHours() < 12 ? ' AM' : ' PM');"
+        "  if (style === 1) return p.toDateString();"
+        "  if (style === 2) return md;"
+        "  if (style === 3) return hm;"
+        "  if (style === 4) return _2(p.getHours()) + ':' + _2(p.getMinutes());"
+        "  return md + ' ' + hm; }"
+        "function IsDate(v) { return v instanceof _DateCtor"
+        "  || (typeof v === 'string' && !isNaN(new _DateCtor(v).getTime())); }"
+        "function VBInt(x) { x = Number(x); return Math.floor(x); }"
+        "function VBSgn(x) { x = Number(x); return x > 0 ? 1 : x < 0 ? -1 : 0; }"
+        "function Left(s, n) { s = String(s); return n <= 0 ? '' : s.slice(0, Math.floor(n)); }"
+        "function Right(s, n) { s = String(s); return n <= 0 ? '' : s.slice(Math.max(0, s.length - Math.floor(n))); }"
+        "function Mid(s, start, len) { s = String(s); var b = Math.max(0, Math.floor(start) - 1);"
+        "  return len === undefined ? s.slice(b) : s.slice(b, b + Math.max(0, Math.floor(len))); }"
+        "function Len(s) { return String(s).length; }"
+        "function InStr(a, b, c) {"
+        "  if (typeof a === 'number') return String(b).indexOf(String(c), Math.max(0, a - 1)) + 1;"
+        "  return String(a).indexOf(String(b)) + 1; }"
+        "function InStrRev(s, needle) { return String(s).lastIndexOf(String(needle)) + 1; }"
+        "function Replace(s, f, r) { s = String(s); f = String(f); r = String(r);"
+        "  return f === '' ? s : s.split(f).join(r); }"
+        "function UCase(s) { return String(s).toUpperCase(); }"
+        "function LCase(s) { return String(s).toLowerCase(); }"
+        "function Trim(s) { return String(s).replace(/^ +/, '').replace(/ +$/, ''); }"
+        "function LTrim(s) { return String(s).replace(/^ +/, ''); }"
+        "function RTrim(s) { return String(s).replace(/ +$/, ''); }"
+        "function Space(n) { return new Array(Math.max(0, Math.floor(n)) + 1).join(' '); }"
+        "function StrComp(a, b) { a = String(a); b = String(b); return a < b ? -1 : a > b ? 1 : 0; }"
+        "function Asc(s) { return DL.Asc(s); }"
+        "function Chr(c) { return DL.Chr(c); }"
+        "function Hex(v) { return (Number(v) >>> 0).toString(16).toUpperCase(); }"
+        "function Oct(v) { return (Number(v) >>> 0).toString(8).toUpperCase(); }"
+        "function CStr(v) { if (v === true) return 'True'; if (v === false) return 'False';"
+        "  return v === null || v === undefined ? '' : String(v); }"
+        "function CInt(v) { return Math.round(Number(String(v).replace(',', '.'))); }"
+        "function CLng(v) { return CInt(v); }"
+        "function CDbl(v) { return Number(String(v).replace(',', '.')); }"
+        "function CSng(v) { return CDbl(v); }"
+        "function CBool(v) { return !!v; }"
+        "function Round(v, digits) { var p = Math.pow(10, digits || 0);"
+        "  return Math.round(Number(v) * p) / p; }"
+        "function FormatNumber(v, digits) { return Number(v).toFixed(digits === undefined ? 2 : digits); }"
+        "function Join(arr, sep) { return (arr || []).join(sep === undefined ? ' ' : sep); }"
+        "function Split(s, sep) { return String(s).split(sep === undefined ? ' ' : sep); }"
+        "function UBound(a) { return a.length - 1; }"
+        "function LBound() { return 0; }"
+        "var WScript = { Echo: function () { print.apply(null, arguments); } };"));
 
     const QJSValue result = m_engine->evaluate(code, QStringLiteral("script.js"));
 
@@ -388,10 +510,12 @@ bool DLObject::DirectSend(int channelNo, const QString &customSequence,
         return sent;
     }
     const int channel = qBound(1, channelNo, 2) - 1;
+    // DirectSend bypasses the OnSend queue AND the communication window
+    // output (no TX row), unlike SendSequence.
     bool sent = false;
-    QMetaObject::invokeMethod(m_host->m_comm, "sendOn", Qt::BlockingQueuedConnection,
+    QMetaObject::invokeMethod(m_host->m_comm, "sendOnEx", Qt::BlockingQueuedConnection,
                               Q_RETURN_ARG(bool, sent), Q_ARG(int, channel),
-                              Q_ARG(QByteArray, parsed.bytes()));
+                              Q_ARG(QByteArray, parsed.bytes()), Q_ARG(bool, false));
     return sent;
 }
 

@@ -60,7 +60,7 @@ public:
 
 public slots:
     // Worker thread. Evaluates the script and reports the outcome.
-    void run(const QString &code);
+    void run(QString code);
     void onIncoming(int channel, const QByteArray &data);
     void onStop();
     void onCommStateChanged(bool running);

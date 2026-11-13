@@ -14,6 +14,7 @@
 
 #include "backend.h"
 #include "checksum.h"
+#include "vbstrans.h"
 #include "commmanager.h"
 #include "dataformat.h"
 #include "dlscript.h"
@@ -2026,6 +2027,91 @@ private slots:
                  + " rows=" + rows + " toast=" + toastText));
         QCOMPARE(seen.mid(0, 4), seen.mid(seen.size() - 4, 4));
         QCOMPARE(seen.mid(0, 2), QByteArray("\x01\x04", 2));
+    }
+
+    void vbscriptSamplesRunUnchanged()
+    {
+        // Scripts written in Docklight's VBScript (as printed in the manual)
+        // must run unmodified: the engine translates them to JavaScript.
+        QVERIFY(VbsTrans::looksLikeVbScript(
+            "Dim x\nDL.AddComment \"hi\""));
+        QVERIFY(!VbsTrans::looksLikeVbScript(
+            "var x = 1;\nDL.AddComment(\"hi\");"));
+
+        CommManager manager;
+        SequenceModel sequences;
+        ScriptRunner runner(&manager, &sequences, nullptr);
+        QStringList notes;
+        bool finishedOk = false;
+        QEventLoop loop;
+        connect(&runner, &ScriptRunner::outputLine, [&](const QString &line, bool error) {
+            if (!error)
+                notes.append(line);
+        });
+        connect(&runner, &ScriptRunner::commentRequested, [&](const QString &line) {
+            notes.append(line);
+        });
+        connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &) {
+            finishedOk = ok;
+            loop.quit();
+        });
+
+        // Loop structures, Select Case with To ranges, functions, Subs and
+        // string functions — all constructs from the manual's VBScript pages.
+        const char *vbs =
+            "Counter = 0\n"
+            "While Counter < 20\n"
+            "  Counter = Counter + 1\n"
+            "Wend\n"
+            "DL.AddComment \"Counter is \" & Counter\n"
+            "Total = 0\n"
+            "For i = 1 To 4\n"
+            "  Total = Total + i\n"
+            "Next\n"
+            "DL.AddComment \"Total \" & Total\n"
+            "N = 0\n"
+            "Do\n"
+            "  N = N + 2\n"
+            "Loop Until N >= 6\n"
+            "DL.AddComment \"N \" & N\n"
+            "Value = 7\n"
+            "Select Case Value\n"
+            "  Case 1 To 5\n"
+            "    DL.AddComment \"low\"\n"
+            "  Case 6 To 10\n"
+            "    DL.AddComment \"mid\"\n"
+            "  Case Else\n"
+            "    DL.AddComment \"high\"\n"
+            "End Select\n"
+            "Function Twice(x)\n"
+            "  Twice = x * 2\n"
+            "End Function\n"
+            "DL.AddComment \"Twice \" & Twice(21)\n"
+            "Sub Show(text)\n"
+            "  DL.AddComment \"Show: \" & text\n"
+            "End Sub\n"
+            "Show \"done\"\n"
+            "s = \"Hello World\"\n"
+            "DL.AddComment Left(s, 5) & \"/\" & UCase(Mid(s, 7))\n"
+            "If 3 = 3 Then DL.AddComment \"eq\"\n"
+            "If 3 <> 4 Then DL.AddComment \"neq\" Else DL.AddComment \"bad\"\n";
+        runner.run(QString::fromUtf8(vbs));
+        QTRY_VERIFY_WITH_TIMEOUT(finishedOk, 5000);
+        QVERIFY2(finishedOk, qPrintable(notes.join(" | ")));
+
+        QStringList joined = notes;
+        const QString all = joined.join('\n');
+        QVERIFY(all.contains("Counter is 20"));
+        QVERIFY(all.contains("Total 10"));
+        QVERIFY(all.contains("N 6"));
+        QVERIFY(all.contains("mid"));
+        QVERIFY(all.contains("Twice 42"));
+        QVERIFY(all.contains("Show: done"));
+        QVERIFY(all.contains("Hello/WORLD"));
+        QVERIFY(all.contains("eq"));
+        QVERIFY(all.contains("neq"));
+        QVERIFY(!all.contains("high"));
+        QVERIFY(!all.contains("bad"));
     }
 
     void scriptEchoesThroughRealPort()

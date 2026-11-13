@@ -209,6 +209,12 @@ bool CommManager::send(const QByteArray &data) {
 }
 
 bool CommManager::sendOn(int channel, const QByteArray &data) {
+    return sendOnEx(channel, data, true);
+}
+
+// log=false bypasses the transmitted() signal, i.e. no communication window
+// output — what DL.DirectSend requires. TX counters still advance.
+bool CommManager::sendOnEx(int channel, const QByteArray &data, bool log) {
     CommLink *link = channel == 0 ? m_a : m_b;
     if (!link || !link->isOpen())
         return false;
@@ -217,7 +223,8 @@ bool CommManager::sendOn(int channel, const QByteArray &data) {
         return false;
     m_txBytes += written;
     emit countersChanged();
-    emit transmitted(channel, data.left(int(written)));
+    if (log)
+        emit transmitted(channel, data.left(int(written)));
     return written == data.size();
 }
 
