@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QRegularExpression>
+#include <cmath>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -837,20 +838,78 @@ QString DLObject::CalcChecksum(const QString &checksumSpec, const QString &dataS
     return DataFormat::toHex(result);
 }
 
+// VBScript-style number output, as Docklight's ConvertSequenceData shows it:
+// up to 7 significant digits for single precision, 15 for double, trailing
+// zeros trimmed, scientific notation with an uppercase E and a signed
+// two-digit exponent outside the fixed range.
+namespace {
+QString vbNumber(double value, bool single) {
+    if (qIsNaN(value))
+        return QStringLiteral("NaN");
+    if (qIsInf(value))
+        return value < 0 ? QStringLiteral("-Inf") : QStringLiteral("Inf");
+    if (value == 0)
+        return QStringLiteral("0");
+    const int digits = single ? 7 : 15;
+    const double abs = qAbs(value);
+    const int exponent = int(std::floor(std::log10(abs)));
+    if (exponent >= -4 && exponent < digits) {
+        QString text = QString::number(value, 'g', digits);
+        // 'g' may still produce an exponent near the switch boundary.
+        if (!text.contains('e'))
+            return text;
+    }
+    QString text = QString::number(value, 'e', digits - 1);
+    const int ePos = text.indexOf('e');
+    QString mantissa = text.left(ePos);
+    QString exponentText = text.mid(ePos + 1);
+    if (mantissa.contains('.')) {
+        while (mantissa.endsWith('0'))
+            mantissa.chop(1);
+        if (mantissa.endsWith('.'))
+            mantissa.chop(1);
+    }
+    // Two-digit exponent minimum with an explicit sign, like VBScript.
+    bool negativeExp = exponentText.startsWith('-');
+    QString digits2 = exponentText;
+    digits2.remove('-').remove('+');
+    while (digits2.size() < 2)
+        digits2.prepend('0');
+    return mantissa + (negativeExp ? QStringLiteral("E-") : QStringLiteral("E+")) + digits2;
+}
+}  // namespace
+
 QString DLObject::ConvertSequenceData(const QString &conversionType, const QString &source,
                                       const QString &representation, bool bigEndian) {
-    const auto hexOf = [](quint64 value, int bytes, bool littleEndian) {
+    // Result format: "H" hex (default), "D" decimal, "B" binary.
+    const auto formatOf = [&](QByteArray data) {
+        DataFormat::Format f = DataFormat::Format::Hex;
+        if (representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0)
+            f = DataFormat::Format::Dec;
+        else if (representation.compare(QLatin1String("B"), Qt::CaseInsensitive) == 0)
+            f = DataFormat::Format::Bin;
+        if (f == DataFormat::Format::Dec) {
+            // Docklight pads decimal sequence bytes to three digits
+            // ("103 154 149 160 081 161 036 075").
+            QStringList parts;
+            for (uchar byte : data)
+                parts.append(QString::asprintf("%03u", byte));
+            return parts.join(QLatin1Char(' '));
+        }
+        return DataFormat::display(data, f);
+    };
+    const auto hexOf = [&](quint64 value, int bytes, bool littleEndian) {
         QByteArray out;
         for (int i = 0; i < bytes; ++i)
             out.append(char((value >> (8 * (littleEndian ? i : bytes - 1 - i))) & 0xFF));
-        return DataFormat::toHex(out);
+        return formatOf(out);
     };
     const auto bytesOf = [&](const QString &text) {
         DataFormat::Format format = DataFormat::Format::Hex;
         if (representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0)
             format = DataFormat::Format::Dec;
         else if (representation.compare(QLatin1String("B"), Qt::CaseInsensitive) == 0)
-            format = DataFormat::Format::Dec;
+            format = DataFormat::Format::Bin;
         const auto parsed = DataFormat::parse(text, format);
         return parsed.bytes();
     };
@@ -877,7 +936,7 @@ QString DLObject::ConvertSequenceData(const QString &conversionType, const QStri
                 v = (v << 8) | uchar(bytes.at(bigEndian ? i : 3 - i));
             memcpy(&f, &v, 4);
         }
-        return QString::number(double(f), 'g', 9);
+        return vbNumber(double(f), true);
     }
     if (type == "fromsingle") {
         float f = QString(source).replace(',', '.').toFloat();
@@ -893,7 +952,7 @@ QString DLObject::ConvertSequenceData(const QString &conversionType, const QStri
                 v = (v << 8) | uchar(bytes.at(bigEndian ? i : 7 - i));
             memcpy(&d, &v, 8);
         }
-        return QString::number(d, 'g', 17);
+        return vbNumber(d, false);
     }
     if (type == "fromdouble") {
         double d = QString(source).replace(',', '.').toDouble();

@@ -815,6 +815,46 @@ private slots:
         QCOMPARE(sum % 256, 0);
     }
 
+    void convertSequenceDataMatchesManualExamples()
+    {
+        // Every expected value is quoted in the Docklight manual page
+        // "DL.ConvertSequenceData".
+        DLScriptEngine host;
+        DLObject dl(&host);
+        QCOMPARE(dl.ConvertSequenceData("toSingle", "3F 9E 06 4B"), QStringLiteral("1.234567"));
+        QCOMPARE(dl.ConvertSequenceData("fromSingle", "1.234567"), QStringLiteral("3F 9E 06 4B"));
+        QCOMPARE(dl.ConvertSequenceData("toDouble", "103 154 149 160 081 161 036 075",
+                                        "D", false),
+                 QStringLiteral("9.87987987987E+53"));
+        QCOMPARE(dl.ConvertSequenceData("fromDouble", "9.87987987987E+53", "D", false),
+                 QStringLiteral("103 154 149 160 081 161 036 075"));
+        QCOMPARE(dl.ConvertSequenceData("toInteger16", "80 00"), QStringLiteral("-32768"));
+        QCOMPARE(dl.ConvertSequenceData("fromInteger16", "-1"), QStringLiteral("FF FF"));
+        QCOMPARE(dl.ConvertSequenceData("toUnsigned16", "80 00"), QStringLiteral("32768"));
+        QCOMPARE(dl.ConvertSequenceData("fromUnsigned16", "65535", "D"),
+                 QStringLiteral("255 255"));
+        QCOMPARE(dl.ConvertSequenceData("toInteger32", "00 00 00 80", "H", false),
+                 QStringLiteral("-2147483648"));
+        QCOMPARE(dl.ConvertSequenceData("fromInteger32", "-2", "H", false),
+                 QStringLiteral("FE FF FF FF"));
+        QCOMPARE(dl.ConvertSequenceData("toUnsigned32", "FF 00 FF 00"),
+                 QStringLiteral("4278255360"));
+        QCOMPARE(dl.ConvertSequenceData("fromUnsigned32", "21121977", "D"),
+                 QStringLiteral("001 066 075 185"));
+        QCOMPARE(dl.ConvertSequenceData("toBool", "00"), QStringLiteral("False"));
+        QCOMPARE(dl.ConvertSequenceData("toBool", "01 00"), QStringLiteral("True"));
+        QCOMPARE(dl.ConvertSequenceData("toText", "FF 48 65 6C 6C 6F 21 0D 00 00"),
+                 QStringLiteral("Hello!"));
+        QCOMPARE(dl.ConvertSequenceData("fromText", "Hello World"),
+                 QStringLiteral("48 65 6C 6C 6F 20 57 6F 72 6C 64"));
+        // Binary representation is honored ("B" was once mapped to decimal).
+        QCOMPARE(dl.ConvertSequenceData("toInteger16", "10000000 00000000", "B"),
+                 QStringLiteral("-32768"));
+        // MOD65536 is a 16-bit result (was one byte due to a Qt constructor trap).
+        QCOMPARE(Checksum::compute("MOD65536", QByteArray("123456789")).toHex().toUpper(),
+                 QByteArray("01DD"));
+    }
+
     void checksumLittleEndian()
     {
         // CRC-MODBUS with the L modifier stores the lower byte first.
