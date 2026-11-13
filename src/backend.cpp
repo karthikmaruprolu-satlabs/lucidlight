@@ -1288,6 +1288,12 @@ QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {
         scriptStopLogging();
         return {};
     }
+    if (name == "scriptSetHtmlStyle") {
+        scriptSetHtmlStyle(arg(0).toString());
+        return {};
+    }
+    if (name == "scriptGetHtmlStyle")
+        return scriptGetHtmlStyle();
     if (name == "scriptSetContentsFilter") {
         scriptSetContentsFilter(arg(0).toInt());
         return {};

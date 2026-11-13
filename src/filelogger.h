@@ -25,6 +25,10 @@ public:
                const QString &representations, int format, bool noHeaders);
     void stop();
     bool active() const { return m_active; }
+    // Docklight "Customize HTML output": the CSS style applied to the <pre>
+    // block of .htm log files. Empty resets to the built-in default.
+    void setHtmlStyle(const QString &css) { m_htmlStyle = css; }
+    QString htmlStyle() const { return m_htmlStyle; }
 
 public slots:
     // Appends one communication row to every open file.
@@ -35,6 +39,7 @@ private:
     struct File {
         QFile *file = nullptr;
         QTextStream *stream = nullptr;
+        QString representation;   // "A", "H", "D" or "B"
     };
     void writeHeader(File &f, const QString &representation);
     void writeRow(File &f, const QString &representation, int direction, int channel,
@@ -50,4 +55,5 @@ private:
     QStringList m_representations;
     int m_format = 0;   // 0 txt, 1 htm, 2 rtf
     bool m_active = false;
+    QString m_htmlStyle;
 };

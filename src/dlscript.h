@@ -290,6 +290,10 @@ public:
     Q_INVOKABLE void OpenProject(const QString &filePathName);
     Q_INVOKABLE void LoadProgramOptions(const QString &filePathName);
     Q_INVOKABLE void SaveProgramOptions(const QString &filePathName);
+    // Lucidlight extension: CSS style for .htm log files ("Customize HTML
+    // output" in Docklight). Empty string resets the built-in default.
+    Q_INVOKABLE void SetHtmlStyle(const QString &css);
+    Q_INVOKABLE QString GetHtmlStyle() const;
     Q_INVOKABLE bool StartLogging(const QString &baseFilePath, bool appendData = true,
                                   const QString &representations = QStringLiteral("AHDB"),
                                   int format = 0, bool highspeed = false,

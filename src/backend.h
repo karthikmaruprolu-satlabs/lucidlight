@@ -136,6 +136,12 @@ public:
                                         const QString &representations, int format,
                                         bool noHeaders);
     Q_INVOKABLE void scriptStopLogging();
+    Q_INVOKABLE void scriptSetHtmlStyle(const QString &css) {
+        m_logger.setHtmlStyle(css);
+    }
+    Q_INVOKABLE QString scriptGetHtmlStyle() const {
+        return m_logger.htmlStyle();
+    }
     Q_INVOKABLE void scriptSetUserOutput(const QString &text);
     Q_INVOKABLE QString scriptPortList();
     Q_INVOKABLE bool scriptLoadOptions(const QString &path);

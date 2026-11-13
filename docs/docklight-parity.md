@@ -174,7 +174,10 @@ not source-compatible, but the DL API names and semantics are replicated.
       call returns, exactly per the manual's "Timing and Program Flow"
 
 ## HTML output / misc
-- [n/a] Docklight HTML output customization, window layout themes
+- [x] HTML log output customization — .htm log files are full documents
+      with a `<style>` block; the CSS is set via the Lucidlight extension
+      `DL.SetHtmlStyle(css)` / `DL.GetHtmlStyle()` (default monospace small).
+      Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
 - [x] Example projects under examples/ (ping-pong demo, Modbus RTU

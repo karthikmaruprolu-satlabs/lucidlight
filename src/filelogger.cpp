@@ -41,6 +41,7 @@ bool FileLogger::start(const QString &baseFilePath, bool appendData,
             continue;
         }
         f.stream = new QTextStream(f.file);
+        f.representation = QLatin1Char(*reps[r]);
         m_files.append(f);
         if (!noHeaders)
             writeHeader(m_files.last(), QLatin1String(reps[r]));
@@ -71,10 +72,9 @@ void FileLogger::onRow(int direction, int channel, const QByteArray &data,
                        const QString &comment, qint64 stampMs, bool highlighted) {
     if (!m_active)
         return;
-    static const char *reps[] = {"A", "H", "D", "B"};
-    for (int i = 0; i < m_files.size(); ++i)
-        writeRow(m_files[i], QLatin1String(reps[i]), direction, channel, data,
-                 comment, stampMs, highlighted);
+    for (File &f : m_files)
+        writeRow(f, f.representation, direction, channel, data, comment,
+                 stampMs, highlighted);
 }
 
 QString FileLogger::asciiWithControlNames(const QByteArray &data) {
@@ -121,7 +121,23 @@ QString FileLogger::stampText(qint64 stampMs) {
 }
 
 void FileLogger::writeHeader(File &f, const QString &representation) {
-    *f.stream << (m_format == 0 ? "" : m_format == 1 ? "<pre>\n" : "{\\rtf1\n");
+    if (m_format == 1) {
+        // Docklight "Customize HTML output": the CSS font/style of the log
+        // comes from the customizable template.
+        const QString css = m_htmlStyle.isEmpty()
+            ? QStringLiteral(
+                  "font-family:'JetBrains Mono','Courier New',monospace; "
+                  "font-size:small")
+            : m_htmlStyle;
+        *f.stream << "<!DOCTYPE html>\n<html>\n<head>\n"
+                  << "<meta charset=\"utf-8\">\n"
+                  << "<title>Docklight Log File</title>\n"
+                  << "<style>\nbody { background:#ffffff; }\n"
+                  << "pre { " << css << "; }\n"
+                  << "</style>\n</head>\n<body>\n<pre>\n";
+    } else if (m_format == 2) {
+        *f.stream << "{\\rtf1\n";
+    }
     *f.stream << "Docklight Log File started... (" << stampText(QDateTime::currentMSecsSinceEpoch())
               << ", " << representation << ")\n";
 }
@@ -130,7 +146,7 @@ void FileLogger::writeFooter(File &f) {
     *f.stream << "Docklight Log File stopped (" << stampText(QDateTime::currentMSecsSinceEpoch())
               << ")\n";
     if (m_format == 1)
-        *f.stream << "</pre>\n";
+        *f.stream << "</pre>\n</body>\n</html>\n";
     else if (m_format == 2)
         *f.stream << "}\n";
 }

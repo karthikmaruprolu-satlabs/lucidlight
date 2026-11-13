@@ -1994,6 +1994,28 @@ private slots:
 
 
 
+
+    void htmlLogCarriesCustomizedStyle()
+    {
+        // Docklight "Customize HTML output": the .htm log gets a full
+        // document with a <style> block; the CSS is customizable.
+        QTemporaryDir dir;
+        const QString base = dir.path() + "/log";
+        FileLogger logger;
+        logger.setHtmlStyle("font-family:serif; font-size:large");
+        QVERIFY(logger.start(base, false, "H", 1, false));
+        logger.onRow(CommLog::Tx, 0, "PING", QString(),
+                     QDateTime::currentMSecsSinceEpoch(), false);
+        logger.stop();
+        QFile f(base + "_hex.htm");
+        QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString html = QString::fromUtf8(f.readAll());
+        QVERIFY(html.startsWith("<!DOCTYPE html>"));
+        QVERIFY(html.contains("pre { font-family:serif; font-size:large; }"));
+        QVERIFY(html.contains("50 49 4E 47"));
+        QVERIFY(html.trimmed().endsWith("</html>"));
+    }
+
     void findSequenceRespectsRepresentation()
     {
         // Docklight "Find Sequence": the needle is parsed in the selected

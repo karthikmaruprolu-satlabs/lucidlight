@@ -1262,6 +1262,14 @@ void DLObject::SaveProgramOptions(const QString &filePathName) {
     m_host->callBridge("scriptSaveOptions", {path});
 }
 
+void DLObject::SetHtmlStyle(const QString &css) {
+    m_host->callBridge("scriptSetHtmlStyle", QVariantList{css});
+}
+
+QString DLObject::GetHtmlStyle() const {
+    return m_host->callBridge("scriptGetHtmlStyle", QVariantList{}).toString();
+}
+
 bool DLObject::StartLogging(const QString &baseFilePath, bool appendData,
                             const QString &representations, int format, bool highspeed,
                             bool noHeaders) {
