@@ -124,3 +124,15 @@ button takes a Snapshot (window hidden until a trigger sequence fires),
 the Script tab runs the same DL scripts interactively (Ctrl+R). Projects are `.llproj` JSON,
 open/save through the portal file dialogs. The session autosaves to
 `~/.local/state/lucidlight/session.json`.
+
+## Logs and libraries
+
+Save communication log (Ctrl+Shift+S) accepts `.log/.txt`, `.htm` (full HTML
+with customizable CSS via `DL.SetHtmlStyle(css)`), `.rtf`, and `.md`
+(Markdown table: Stamp | Direction | Data). File > Export/Import sequence
+library (`.llseq`) shares all sequences between projects — ids are remapped
+and colliding names get " (2)" suffixes on import. File > Expert Options:
+high priority timing raises scheduler priority best-effort
+(rtkit → sched_setscheduler → nice). Timing display: seconds-only with
+microsecond precision when the µs toolbar toggle is on
+(`DL.SetMicroStamps(true)`).
