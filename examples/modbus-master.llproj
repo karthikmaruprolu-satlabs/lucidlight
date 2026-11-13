@@ -1,0 +1,30 @@
+{
+ "version": 1,
+ "channelA": {
+  "device": "/tmp/llptyA",
+  "baud": 115200,
+  "parity": 0,
+  "dataBits": 8,
+  "stopBits": 1,
+  "flow": 0
+ },
+ "sequences": [
+  {
+   "id": 1,
+   "name": "Read Holding Reg",
+   "isSend": true,
+   "data": "01 03 00 00 00 02 ?? ??",
+   "format": "H",
+   "checksumSpec": "(1,6) CRC-MODBUS L"
+  },
+  {
+   "id": 2,
+   "name": "Modbus Response",
+   "isSend": false,
+   "data": "01 03 04 ?? ?? ?? ?? ?? ??",
+   "format": "H",
+   "checksumSpec": "(1,7) CRC-MODBUS L",
+   "comment": "Response %_S"
+  }
+ ]
+}

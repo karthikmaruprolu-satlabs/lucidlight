@@ -1,0 +1,37 @@
+{
+ "version": 1,
+ "channelA": {
+  "device": "",
+  "baud": 115200,
+  "parity": 0,
+  "dataBits": 8,
+  "stopBits": 1,
+  "flow": 0
+ },
+ "channelB": {
+  "device": "",
+  "baud": 115200,
+  "parity": 0,
+  "dataBits": 8,
+  "stopBits": 1,
+  "flow": 0
+ },
+ "sequences": [
+  {
+   "id": 1,
+   "name": "Ping",
+   "isSend": true,
+   "data": "Ping",
+   "format": "A",
+   "hotkey": 0
+  },
+  {
+   "id": 2,
+   "name": "Pong received",
+   "isSend": false,
+   "data": "Pong",
+   "format": "A",
+   "comment": "Got a Pong at %_T"
+  }
+ ]
+}

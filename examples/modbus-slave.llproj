@@ -1,0 +1,30 @@
+{
+ "version": 1,
+ "channelA": {
+  "device": "/tmp/llptyB",
+  "baud": 115200,
+  "parity": 0,
+  "dataBits": 8,
+  "stopBits": 1,
+  "flow": 0
+ },
+ "sequences": [
+  {
+   "id": 1,
+   "name": "Request",
+   "isSend": false,
+   "data": "01 03 00 00 00 02 ?? ??",
+   "format": "H",
+   "checksumSpec": "(1,6) CRC-MODBUS L",
+   "replyToId": 2,
+   "comment": "REQ %_S"
+  },
+  {
+   "id": 2,
+   "name": "Response",
+   "isSend": true,
+   "data": "01 03 04 00 01 02 03 EA 92",
+   "format": "H"
+  }
+ ]
+}
