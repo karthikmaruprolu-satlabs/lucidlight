@@ -114,7 +114,7 @@ with no device attached.
 ## Desktop use
 
 `lucidlight` opens the GUI: Start (Space) begins communication, the send bar
-takes notation and Enter sends, F1–F12 fire sequences, the Script tab runs
+takes notation and Enter sends, Ctrl+F1–F12 fire sequences, the Script tab runs
 the same DL scripts interactively (Ctrl+R). Projects are `.llproj` JSON,
 open/save through the portal file dialogs. The session autosaves to
 `~/.local/state/lucidlight/session.json`.

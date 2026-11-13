@@ -30,7 +30,7 @@ flow, poke the device, automate the whole conversation with a script.
 - **Send / receive sequences** — named snippets in Text/Hex/Dec/Binary
   notation with wildcard parameters, function characters (`&` delay, `%`
   break, `!` handshake), **checksum areas** (MOD256, XOR, LRC, CRC-8/16/32,
-  MODBUS, CCITT… or a generic CRC spec), bound to **F1–F12** so they fire
+  MODBUS, CCITT… or a generic CRC spec), bound to **Ctrl+F1–F12** so they fire
   anywhere, optional auto-repeat, and **receive triggers**: a receive
   pattern (with `?`/`#` wildcards and checksum validation) that answers,
   comments with `%_` macros, snapshots, or stops the run.

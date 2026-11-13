@@ -147,12 +147,14 @@ not source-compatible, but the DL API names and semantics are replicated.
       executes the project script when no --script is given)
 - [x] Program options save/load via DL.Load/SaveProgramOptions (JSON store)
 
-## Hot keys (F1 help, Ctrl+N/O/S/P, F5/F6 comm, F2/F3 logging,
-## Shift+F5/F6/F7 script, Ctrl+T save script, F12/Shift+F12 layout,
-## Ctrl+F find, Ctrl+W clear, Ctrl+Tab representation, Space send, Ctrl+E edit)
-- [x] F1-F12 sequence hotkeys, Space toggles comm, F5/F6 comm, F2/F3 file
-      logging, Shift+F5/F6/F7 script run/stop/panel, Ctrl+T save script,
-      Ctrl+F find, Ctrl+K clear, Ctrl+Tab representation cycling
+## Hot keys — per the manual's "Hot Keys" appendix
+- [x] F1 context help (also "?"), F5 start / F6 stop communication, F2/F3
+      file logging, Ctrl+F5/F6 keyboard console on/off, F12 script area,
+      Shift+F12 sequence lists, Shift+F5 run / Shift+F6 stop script,
+      Ctrl+T save script, Ctrl+F find, Ctrl+W clear, Ctrl+Tab
+      representation cycling, Space send
+- [x] Sequence hotkeys on Ctrl+F1..Ctrl+F12 (Lucidlight extension; Docklight
+      has no sequence hotkeys — the plain F-keys are reserved)
 
 ## Scripting extras (Lucidlight extensions, documented as such)
 - [x] DL.Send/SendHex/SendStr/SendBytes, DL.Receive/ReceiveStr/ReceiveHex/

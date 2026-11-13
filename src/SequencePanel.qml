@@ -94,7 +94,7 @@ Rectangle {
                         color: isSend ? Qt.alpha(theme.blue, 0.15) : Qt.alpha(theme.green, 0.15)
                         Label {
                             anchors.centerIn: parent
-                            text: hotkey > 0 ? "F" + hotkey : (isSend ? "→" : "↺")
+                            text: hotkey > 0 ? "\u2303F" + hotkey : (isSend ? "→" : "↺")
                             color: isSend ? theme.blue : theme.green
                             font.pixelSize: 9
                             font.weight: Font.Bold
@@ -163,7 +163,7 @@ Rectangle {
 
         Label {
             Layout.fillWidth: true
-            text: qsTr("F1–F12 send their sequence anywhere")
+            text: qsTr("Ctrl+F1–F12 send their sequence anywhere")
             color: Qt.alpha(theme.muted, 0.7)
             font.pixelSize: 10
             wrapMode: Text.Wrap

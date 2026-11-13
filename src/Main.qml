@@ -28,19 +28,20 @@ ApplicationWindow {
     property bool searchVisible: false
     property bool forceClose: false
 
-    // Sequence hotkeys, the F1..F12 send bar of Docklight.
-    Shortcut { sequence: "F1";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(1) }
-    Shortcut { sequence: "F2";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(2) }
-    Shortcut { sequence: "F3";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(3) }
-    Shortcut { sequence: "F4";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(4) }
-    Shortcut { sequence: "F5";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(5) }
-    Shortcut { sequence: "F6";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(6) }
-    Shortcut { sequence: "F7";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(7) }
-    Shortcut { sequence: "F8";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(8) }
-    Shortcut { sequence: "F9";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(9) }
-    Shortcut { sequence: "F10"; context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(10) }
-    Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(11) }
-    Shortcut { sequence: "F12"; context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(12) }
+    // Sequence hotkeys on Ctrl+F1..Ctrl+F12 — the plain F-keys carry the
+    // Docklight function map (F5/F6 comm, F2/F3 logging, F12 layout, ...).
+    Shortcut { sequence: "Ctrl+F1";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(1) }
+    Shortcut { sequence: "Ctrl+F2";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(2) }
+    Shortcut { sequence: "Ctrl+F3";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(3) }
+    Shortcut { sequence: "Ctrl+F4";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(4) }
+    Shortcut { sequence: "Ctrl+F5";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(5) }
+    Shortcut { sequence: "Ctrl+F6";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(6) }
+    Shortcut { sequence: "Ctrl+F7";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(7) }
+    Shortcut { sequence: "Ctrl+F8";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(8) }
+    Shortcut { sequence: "Ctrl+F9";  context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(9) }
+    Shortcut { sequence: "Ctrl+F10"; context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(10) }
+    Shortcut { sequence: "Ctrl+F11"; context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(11) }
+    Shortcut { sequence: "Ctrl+F12"; context: Qt.ApplicationShortcut; onActivated: backend.sendByHotkey(12) }
 
     Shortcut { sequence: "Space"; context: Qt.ApplicationShortcut; enabled: !focusInTextField(); onActivated: backend.toggleComm() }
     Shortcut { sequence: "Ctrl+K"; context: Qt.ApplicationShortcut; onActivated: backend.clearLog() }
@@ -59,16 +60,24 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+P"; context: Qt.ApplicationShortcut; onActivated: printLog() }
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; enabled: !focusInTextField(); onActivated: helpVisible = !helpVisible }
     Shortcut { sequence: "Ctrl+Q"; context: Qt.ApplicationShortcut; onActivated: win.close() }
-    // Docklight function-key map: F5/F6 communication, F2/F3 logging,
-    // Shift+F5/F6/F7 script control, Ctrl+T save script.
+    // Docklight function-key map (manual "Hot Keys"): F5/F6 communication,
+    // F2/F3 logging, Ctrl+F5/F6 keyboard console, F12 script area,
+    // Shift+F12 sequence lists, Shift+F5/F6/F7/F8 script control,
+    // Ctrl+T save script, Ctrl+W clear all comm windows.
     Shortcut { sequence: "F5"; enabled: !focusInTextField(); onActivated: backend.toggleComm() }
     Shortcut { sequence: "F6"; enabled: !focusInTextField(); onActivated: backend.toggleComm() }
     Shortcut { sequence: "F2"; enabled: !focusInTextField(); onActivated: if (!backend.fileLogging) backend.startFileLogging() }
     Shortcut { sequence: "F3"; enabled: !focusInTextField(); onActivated: backend.stopFileLogging() }
-    Shortcut { sequence: "Shift+F5"; onActivated: { bottomBar.currentIndex = 1; scriptPanel.runScript(); } }
+    Shortcut { sequence: "Ctrl+F5"; enabled: !focusInTextField(); onActivated: backend.keyboardConsole = true }
+    Shortcut { sequence: "Ctrl+F6"; enabled: !focusInTextField(); onActivated: backend.keyboardConsole = false }
+    Shortcut { sequence: "F12"; onActivated: bottomBar.visible = !bottomBar.visible }
+    Shortcut { sequence: "Shift+F12"; onActivated: sidebar.visible = !sidebar.visible }
+    Shortcut { sequence: "Shift+F5"; onActivated: { bottomBar.visible = true; bottomBar.currentIndex = 1; scriptPanel.runScript(); } }
     Shortcut { sequence: "Shift+F6"; onActivated: backend.scripts.stop() }
-    Shortcut { sequence: "Shift+F7"; onActivated: bottomBar.currentIndex = 1 }
+    Shortcut { sequence: "Shift+F7"; onActivated: { bottomBar.visible = true; bottomBar.currentIndex = 1 } }
+    Shortcut { sequence: "Shift+F8"; onActivated: { bottomBar.visible = true; bottomBar.currentIndex = 1; scriptPanel.runScript(); } }
     Shortcut { sequence: "Ctrl+T"; onActivated: saveScript() }
+    Shortcut { sequence: "Ctrl+W"; onActivated: backend.clearLog() }
 
     // True when the keyboard focus sits in a text entry, so plain keys must
     // type instead of triggering shortcuts.
