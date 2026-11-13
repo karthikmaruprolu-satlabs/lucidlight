@@ -180,6 +180,14 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] Case-insensitive event procedure names — "function dl_onreceive()" and
+      "sub dl_onsend(...)" fire like the exact-case forms (VBScript semantics)
+- [x] Flood-hardening: 5000-message TCP bursts (~2 MB/s) are processed
+      without backlog; the relative clock no longer resets on link state
+      changes (a TCP client connecting to a SERVER port used to move the
+      us baseline and produce negative second-stamps)
+- [x] External editor temp file now carries the process id, so two
+      Lucidlight instances don't share one temp script
 - [x] Microsecond timing — the µs toolbar toggle (and DL.SetMicroStamps /
       DL.GetMicroStamps) switches every time display to seconds-only with
       6 decimals: the clock column counts seconds from window start, the

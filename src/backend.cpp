@@ -48,7 +48,10 @@ Backend::Backend(QObject *parent)
     });
     connect(m_comm, &CommManager::runningChanged, this, [this] {
         if (m_comm->running()) {
-            m_log->startClock();
+            // NOTE: the relative clock is NOT reset here — link state changes
+            // (e.g. a TCP client connecting to our SERVER port) re-emit
+            // runningChanged mid-session and must not move the µs baseline.
+            // startClock() runs in toggleComm() before start() instead.
             m_repeatClock.start();
             m_nextRepeatAt.clear();
             m_matchers[0].reset();
@@ -215,7 +218,8 @@ bool Backend::editScriptExternally() {
         m_scriptWatcher = new QFileSystemWatcher(this);
     if (m_scriptTempFile.isEmpty()) {
         m_scriptTempFile = QDir::tempPath()
-            + "/lucidlight-script."
+            + QStringLiteral("/lucidlight-script-%1.")
+                .arg(QCoreApplication::applicationPid())
             + (scriptSource().contains("/*vbs*/") ? "vbs" : "js");
         connect(m_scriptWatcher, &QFileSystemWatcher::fileChanged, this,
                 [this](const QString &path) {
@@ -508,6 +512,9 @@ void Backend::toggleComm() {
         m_comm->stop();
         return;
     }
+    // Reset the relative clock BEFORE any "Port opened" event rows are
+    // appended, so the microsecond seconds-column never goes negative.
+    m_log->startClock();
     if (m_comm->start(m_a->config(), m_b->config())) {
         m_repeatTimer.start();
         m_repeatClock.start();

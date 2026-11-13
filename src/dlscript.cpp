@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJSEngine>
+#include <QJSValueIterator>
 #include <QProcess>
 #include <QTimer>
 
@@ -98,6 +99,23 @@ void DLScriptEngine::onSendRequestDone() {
 
 // Runs the queued DL_OnReceive() events. Called from park slices, so the JS
 // virtual machine is free (the main script is waiting inside a DL call).
+
+// VBScript is case-insensitive: "sub dl_onreceive(...)" must work like
+// "Sub DL_OnReceive(...)". Find the event handler regardless of casing.
+static QJSValue eventHandler(const QJSEngine *engine, const QString &name) {
+    const QJSValue exact = engine->globalObject().property(name);
+    if (exact.isCallable())
+        return exact;
+    QJSValueIterator it(engine->globalObject());
+    while (it.hasNext()) {
+        it.next();
+        if (it.name().compare(name, Qt::CaseInsensitive) == 0
+            && it.value().isCallable())
+            return it.value();
+    }
+    return QJSValue();
+}
+
 void DLScriptEngine::processReceiveEvents() {
     QVector<ReceiveEvent> pending;
     {
@@ -109,7 +127,7 @@ void DLScriptEngine::processReceiveEvents() {
         if (m_stop)
             break;
         m_onReceive = event;
-        const QJSValue handler = m_engine->globalObject().property("DL_OnReceive");
+        const QJSValue handler = eventHandler(m_engine, "DL_OnReceive");
         if (handler.isCallable()) {
             QJSValue result = handler.call();
             if (result.isError()) {
@@ -365,7 +383,7 @@ void DLScriptEngine::run(QString code) {
 
 QByteArray DLScriptEngine::processOnSend(const QString &name, int index,
                                          const QByteArray &bytes) {
-    const QJSValue handler = m_engine ? m_engine->globalObject().property("DL_OnSend")
+    const QJSValue handler = m_engine ? eventHandler(m_engine, "DL_OnSend")
                                       : QJSValue();
     if (!m_engine || !handler.isCallable())
         return bytes;

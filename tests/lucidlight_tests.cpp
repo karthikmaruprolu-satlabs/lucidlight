@@ -1998,6 +1998,58 @@ private slots:
 
 
 
+
+    void onReceiveHandlerCaseInsensitive()
+    {
+        // VBScript is case-insensitive: "sub dl_onreceive(...)" and even
+        // "function dl_onReceive" must fire like "Sub DL_OnReceive".
+        Backend backend;
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+        backend.channelA()->setDevice(slave);
+        // DL_OnReceive fires per receive-sequence match (Docklight parity).
+        backend.sequences()->add(QVariantMap{{"name", "PingRx"},
+                                             {"isSend", false}, {"format", 0},
+                                             {"data", "ping"}});
+        auto *runner = backend.scripts();
+        QVERIFY(runner);
+        bool finished = false;
+        bool ok = false;
+        QStringList notes;
+        QObject::connect(runner, &ScriptRunner::commentRequested,
+                         [&](const QString &line, bool) { notes << line; });
+        QObject::connect(runner, &ScriptRunner::finished,
+                         [&](bool success, const QString &) {
+                             finished = true;
+                             ok = success;
+                         });
+        // Docklight's DL_OnReceive() takes no arguments; the data comes
+        // from the DL.OnReceive_* context functions.
+        runner->run(QStringLiteral(
+            "function dl_onreceive() {"
+            "  DL.Comment('got ' + DL.OnReceive_GetData('A'));"
+            "}"
+            "DL.StartCommunication();"
+            "DL.SendStr('ping');"
+            "DL.Pause(800);"));
+        // The pty needs an explicit echo: read the TX and write it back.
+        char buf[64];
+        ssize_t n = 0;
+        for (int i = 0; i < 50 && n <= 0; ++i) {
+            QThread::msleep(20);
+            QCoreApplication::processEvents();
+            n = ::read(master, buf, sizeof(buf) - 1);
+        }
+        QVERIFY(n > 0);
+        QCOMPARE(::write(master, buf, n), n);
+        QTRY_VERIFY_WITH_TIMEOUT(finished, 5000);
+        // Let the queued event drain.
+        QTRY_VERIFY_WITH_TIMEOUT(!notes.filter("got ping").isEmpty(), 3000);
+        QVERIFY(ok);
+        ::close(master);
+    }
+
     void microsecondLogFiles()
     {
         // With microsecond timing enabled, log files carry seconds-only
@@ -2168,7 +2220,8 @@ private slots:
         // reloaded into the built-in editor.
         Backend backend;
         backend.setScriptSource("print(1)\n");
-        const QString tmp = QDir::tempPath() + "/lucidlight-script.js";
+        const QString tmp = QDir::tempPath() + "/lucidlight-script-"
+            + QString::number(QCoreApplication::applicationPid()) + ".js";
         QFile::remove(tmp);
         // A fake "editor" that appends a comment line to the temp file.
         backend.setExternalEditor(
