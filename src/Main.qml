@@ -129,6 +129,18 @@ ApplicationWindow {
             sequenceDialog.openEdit(0);
         else if (name === "help")
             win.helpVisible = true;
+        else if (name === "params") {
+            // Open the Send Sequence Parameter dialog for the first send
+            // sequence that has wildcards.
+            const count = backend.sequences.count;
+            for (let r = 0; r < count; ++r) {
+                const parsed = backend.sequenceWildcardAreas(r);
+                if (parsed.length > 0) {
+                    parameterDialog.openFor(r, parsed);
+                    break;
+                }
+            }
+        }
     }
 
     // Routes portal picker results to the right action.
@@ -700,6 +712,19 @@ ApplicationWindow {
 
     SequenceDialog {
         id: sequenceDialog
+    }
+
+    // Docklight's "Send Sequence Parameter" dialog: pops up when a send
+    // sequence with wildcard parameters is started from the UI.
+    ParameterDialog {
+        id: parameterDialog
+    }
+
+    Connections {
+        target: backend
+        function onParameterRequest(row, minLengths) {
+            parameterDialog.openFor(row, minLengths);
+        }
     }
 
     HelpOverlay {

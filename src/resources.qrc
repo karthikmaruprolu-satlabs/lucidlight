@@ -9,6 +9,7 @@
         <file alias="SequencePanel.qml">SequencePanel.qml</file>
         <file alias="SettingsPopup.qml">SettingsPopup.qml</file>
         <file alias="SequenceDialog.qml">SequenceDialog.qml</file>
+        <file alias="ParameterDialog.qml">ParameterDialog.qml</file>
         <file alias="SendPanel.qml">SendPanel.qml</file>
         <file alias="ScriptPanel.qml">ScriptPanel.qml</file>
         <file alias="HelpOverlay.qml">HelpOverlay.qml</file>

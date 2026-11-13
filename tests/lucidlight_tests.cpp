@@ -2028,6 +2028,59 @@ private slots:
         QCOMPARE(seen.mid(0, 2), QByteArray("\x01\x04", 2));
     }
 
+    void sendSequenceParameterDialogFlow()
+    {
+        // Docklight's Send Sequence Parameter dialog: a wildcard sequence
+        // sent from the UI emits parameterRequest; the answered values fill
+        // the wildcard areas (blank padding like the manual's rules).
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        backend.sequences()->add(QVariantMap{
+            {"name", "Set value"}, {"isSend", true}, {"format", 0},
+            {"data", "SET=??\r\n"}});
+        backend.sequences()->add(QVariantMap{
+            {"name", "Plain"}, {"isSend", true}, {"format", 0},
+            {"data", "HI"}});
+        QCOMPARE(backend.sequenceWildcardAreas(0), QStringList{"2"});
+        QCOMPARE(backend.sequenceWildcardAreas(1), QStringList{});
+
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        int requestedRow = -1;
+        QStringList requestedMin;
+        connect(&backend, &Backend::parameterRequest,
+                [&](int row, const QStringList &minLens) {
+            requestedRow = row;
+            requestedMin = minLens;
+        });
+        backend.sendSequence(0);
+        QTRY_COMPARE_WITH_TIMEOUT(requestedRow, 0, 2000);
+        QCOMPARE(requestedMin, QStringList{"2"});
+
+        // Answer the dialog: one parameter fills the two-character area,
+        // padded with a blank (ASCII 32).
+        backend.sendSequenceWithParams(0, QStringList{"7"});
+        QByteArray seen;
+        char buffer[64];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1000 && seen.size() < 8) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 30);
+            const ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0)
+                seen.append(buffer, int(n));
+        }
+        QCOMPARE(seen, QByteArray("SET=7 \r\n", 8));
+
+        backend.comm()->stop();
+        ::close(master);
+    }
+
     void receiveChecksumWithWildcardsMatches()
     {
         // Modbus-style: data with wildcard bytes plus a checksum area over

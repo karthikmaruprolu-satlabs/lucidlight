@@ -79,6 +79,16 @@ int runHeadless(const QString &projectPath, const QString &scriptPath, int durat
         if (!json)
             out << text << "\n";
     });
+    // Headless stand-in for the Send Sequence Parameter dialog: LUCID_PARAMS
+    // carries "|"-separated parameter values; otherwise empty values are
+    // filled like Docklight's "too few parameters" rule.
+    QObject::connect(&backend, &Backend::parameterRequest,
+                     [&backend](int row, const QStringList &) {
+        const QStringList values =
+            qEnvironmentVariable("LUCID_PARAMS")
+                .split('|', Qt::SkipEmptyParts);
+        backend.sendSequenceWithParams(row, values);
+    });
 
     if (!projectPath.isEmpty())
         backend.openProjectFrom(projectPath);

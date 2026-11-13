@@ -501,6 +501,29 @@ void Backend::armRepeat(const Sequence *seq, const QStringList &parameters) {
     }
 }
 
+QStringList Backend::sequenceWildcardAreas(int row) const {
+    const Sequence *seq = m_sequences->sequenceAt(row);
+    if (!seq || !seq->isSend)
+        return {};
+    const auto parsed = DataFormat::parse(seq->data, seq->format);
+    if (!parsed.ok())
+        return {};
+    QStringList minLengths;
+    int run = 0;
+    for (const auto &e : parsed.elements) {
+        if (e.kind == ParsedBytes::Element::WildOne
+            || e.kind == ParsedBytes::Element::WildZeroOrOne)
+            ++run;
+        else if (run) {
+            minLengths.append(QString::number(run));
+            run = 0;
+        }
+    }
+    if (run)
+        minLengths.append(QString::number(run));
+    return minLengths;
+}
+
 void Backend::sendSequenceWithParams(int row, const QStringList &parameters) {
     const Sequence *seq = m_sequences->sequenceAt(row);
     if (!seq || !seq->isSend)

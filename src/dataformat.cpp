@@ -129,6 +129,56 @@ ParsedBytes DataFormat::parse(const QString &input, Format format) {
                     return result;
                 continue;
             }
+            if (c == QLatin1Char('<')) {
+                // Docklight-style control character notation: <CR>, <LF>,
+                // <NUL> ... <DEL>, <#> / <?> wildcards, or a decimal code
+                // like <13>. Anything unrecognized stays literal text.
+                const int close = input.indexOf(QLatin1Char('>'), i + 1);
+                if (close > i + 1) {
+                    const QString name =
+                        input.mid(i + 1, close - i - 1).toUpper();
+                    bool isControl = false;
+                    for (int b = 0; b <= 255 && !isControl; ++b) {
+                        const QString n = DataFormat::controlName(uchar(b));
+                        if (!n.isEmpty() && n.toUpper() == name)
+                            isControl = true;
+                    }
+                    if (name == QLatin1String("?")) {
+                        ParsedBytes::Element e;
+                        e.kind = ParsedBytes::Element::WildOne;
+                        result.elements.append(e);
+                        i = close;
+                        continue;
+                    }
+                    if (name == QLatin1String("#")) {
+                        ParsedBytes::Element e;
+                        e.kind = ParsedBytes::Element::WildZeroOrOne;
+                        result.elements.append(e);
+                        i = close;
+                        continue;
+                    }
+                    bool okDec = false;
+                    const int code = name.toInt(&okDec, 10);
+                    if (okDec && code >= 0 && code <= 255)
+                        isControl = true;
+                    if (isControl) {
+                        uchar value = okDec ? uchar(code) : uchar(0);
+                        if (!okDec) {
+                            // Resolve the mnemonic back to its byte value.
+                            for (int b = 0; b < 256; ++b)
+                                if (DataFormat::controlName(uchar(b))
+                                        .toUpper() == name)
+                                    value = uchar(b);
+                        }
+                        ParsedBytes::Element e;
+                        e.kind = ParsedBytes::Element::Data;
+                        e.value = value;
+                        result.elements.append(e);
+                        i = close;
+                        continue;
+                    }
+                }
+            }
             if (c == QLatin1Char('?')) {
                 ParsedBytes::Element e;
                 e.kind = ParsedBytes::Element::WildOne;

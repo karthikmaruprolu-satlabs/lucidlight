@@ -7,6 +7,7 @@
 #include <QQuickStyle>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QFile>
 #include <QTimer>
 #include <cstdlib>
 
@@ -39,6 +40,14 @@ int main(int argc, char *argv[]) {
         return 1;
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
     window->show();
+
+    // Optional positional argument: a project (.llproj) to open before the
+    // grab, so dialogs can be exercised against real sequence data.
+    if (argc > 1 && !QString::fromLocal8Bit(argv[1]).startsWith("file:")) {
+        const QString projectPath = QString::fromLocal8Bit(argv[1]);
+        if (QFile::exists(projectPath))
+            backend.openProjectFrom(projectPath);
+    }
 
     // Let bindings settle, then grab.
     QTimer::singleShot(700, &app, [&] {

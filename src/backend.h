@@ -135,6 +135,9 @@ public:
                                         const QStringList &parameters);
     // Manual send with wildcard parameters answered by the dialog.
     Q_INVOKABLE void sendSequenceWithParams(int row, const QStringList &parameters);
+    // Wildcard parameter areas (minimum lengths) of a sequence, for the
+    // Send Sequence Parameter dialog.
+    Q_INVOKABLE QStringList sequenceWildcardAreas(int row) const;
     // QML answers a script dialog; value -1 = input box text via textValue.
     Q_INVOKABLE void answerScriptDialog(int value, const QString &textValue);
 
