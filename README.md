@@ -58,10 +58,10 @@ flow, poke the device, automate the whole conversation with a script.
 
 ```sh
 cd lucidlight
-./bin/install        # builds and installs via makepkg, shows up in the launcher
+./install.sh        # builds and installs via makepkg, shows up in the launcher
 ```
 
-Or manually: `./bin/build` and copy `build/lucidlight` somewhere on `$PATH`.
+Or manually: `./build.sh` and copy `build/lucidlight` somewhere on `$PATH`.
 Serial devices need your user in the `uucp` group (Omarchy sets this up).
 
 ## Data notation
@@ -184,8 +184,8 @@ into `~/.pi/agent/skills/lucidlight/`.
 ## Development
 
 ```sh
-./bin/build          # qmake6 + make into build/lucidlight
-./bin/test           # 37 unit and end-to-end tests (offscreen)
+./build.sh          # qmake6 + make into build/lucidlight
+./test.sh           # 37 unit and end-to-end tests (offscreen)
 tests/grab_harness   # LUCID_SIM=1 LUCID_TAB=script ./grab_harness — screenshots offscreen
 ```
 

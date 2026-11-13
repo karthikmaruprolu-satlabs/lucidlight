@@ -3,7 +3,7 @@
 # Usage: bin/asan            (build only)
 #        bin/asan <args>     (build, then run ./build/asan/lucidlight <args>)
 set -eu
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 DIR="$ROOT/build/asan"
 mkdir -p "$DIR"
 cd "$DIR"

@@ -11,7 +11,7 @@ sha256sums=()
 
 build() {
   cd "$startdir/.."
-  ./bin/build
+  ./build.sh
 }
 
 package() {

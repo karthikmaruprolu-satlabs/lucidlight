@@ -3,7 +3,7 @@
 # only the finished binary is placed at build/lucidlight.
 set -eu
 
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 DIR="$ROOT/build/app"
 mkdir -p "$DIR"
 cd "$DIR"
