@@ -410,6 +410,37 @@ bool Backend::sendText(const QString &text, int format) {
     return true;
 }
 
+
+// Docklight calls the DL_OnSend() script procedure before every Send
+// Sequence transmission (manual sends included). The handler can read the
+// data, replace it with DL.OnSend_SetData, or suppress it with an empty
+// string. Returns false when the transmission is suppressed.
+bool Backend::applyOnSend(const Sequence &seq, QVector<ParsedBytes::Element> &elements, int rowIndex) {
+    if (!m_runner || !m_runner->running() || !m_runner->engine())
+        return true;
+    QByteArray bytes;
+    for (const auto &e : elements)
+        if (e.kind == ParsedBytes::Element::Data
+            || e.kind == ParsedBytes::Element::WildOne
+            || e.kind == ParsedBytes::Element::WildZeroOrOne)
+            bytes.append(char(e.value));
+    QByteArray modified;
+    QMetaObject::invokeMethod(m_runner->engine(), "processOnSend",
+                              Qt::BlockingQueuedConnection,
+                              Q_RETURN_ARG(QByteArray, modified),
+                              Q_ARG(QString, seq.name), Q_ARG(int, rowIndex),
+                              Q_ARG(QByteArray, bytes));
+    if (modified.isEmpty())
+        return false;   // OnSend_SetData "" suppresses the transmission
+    if (modified == bytes)
+        return true;
+    const auto parsed = DataFormat::parse(DataFormat::toHex(modified),
+                                          DataFormat::Format::Hex);
+    if (parsed.ok())
+        elements = parsed.elements;
+    return true;
+}
+
 void Backend::sendSequence(int row) {
     const Sequence *seq = m_sequences->sequenceAt(row);
     if (!seq || !seq->isSend)
@@ -447,8 +478,12 @@ void Backend::sendSequence(int row) {
         emit toast(tr("%1: %2").arg(seq->name, error));
         return;
     }
-    transmitElements(elements);
-    armRepeat(seq);
+    if (applyOnSend(*seq, elements, row)) {
+        transmitElements(elements);
+        armRepeat(seq);
+    } else {
+        emit scriptSendSequenceDone();
+    }
 }
 
 void Backend::armRepeat(const Sequence *seq, const QStringList &parameters) {
@@ -475,8 +510,12 @@ void Backend::sendSequenceWithParams(int row, const QStringList &parameters) {
         emit toast(tr("%1: %2").arg(seq->name, error));
         return;
     }
-    transmitElements(elements);
-    armRepeat(seq, parameters);
+    if (applyOnSend(*seq, elements, row)) {
+        transmitElements(elements);
+        armRepeat(seq, parameters);
+    } else {
+        emit scriptSendSequenceDone();
+    }
 }
 
 void Backend::sendByHotkey(int keyNumber) {
@@ -957,7 +996,12 @@ void Backend::scriptSendSequence(int row, const QString &customData,
                                       Q_RETURN_ARG(QByteArray, modified),
                                       Q_ARG(QString, name), Q_ARG(int, index),
                                       Q_ARG(QByteArray, bytes));
-            if (!modified.isEmpty() && modified != bytes) {
+            if (modified.isEmpty()) {
+                // OnSend_SetData "" suppresses the transmission entirely.
+                emit scriptSendSequenceDone();
+                return;
+            }
+            if (modified != bytes) {
                 const auto parsed = DataFormat::parse(
                     DataFormat::toHex(modified), DataFormat::Format::Hex);
                 elements = parsed.ok() ? parsed.elements : elements;

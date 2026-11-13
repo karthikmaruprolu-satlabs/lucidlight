@@ -170,6 +170,7 @@ private slots:
 
 private:
     void transmitElements(const QVector<ParsedBytes::Element> &elements);
+    bool applyOnSend(const Sequence &seq, QVector<ParsedBytes::Element> &elements, int rowIndex = -1);
     bool buildSendElements(const Sequence &seq, const QStringList &parameters,
                            DataFormat::Format paramFormat,
                            QVector<ParsedBytes::Element> *out, QString *error);
