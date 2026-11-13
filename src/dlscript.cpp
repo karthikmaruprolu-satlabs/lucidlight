@@ -1284,7 +1284,13 @@ void DLObject::PlaybackLogFile(const QString &filePathName, const QString &dataD
         const qint64 at = stamp.isValid() ? stamp.toMSecsSinceEpoch() : 0;
         if (base == 0)
             base = at;
-        entries.append({at - base, DataFormat::fromHex(m.captured(10))});
+        const QString payload = m.captured(10).trimmed();
+        QByteArray bytes;
+        if (payload.contains(QRegularExpression("^[0-9A-Fa-f ]+$")))
+            bytes = DataFormat::fromHex(payload);
+        else
+            bytes = payload.toLatin1();   // ASCII log lines
+        entries.append({at - base, bytes});
     }
     qint64 previous = 0;
     for (const Entry &entry : entries) {

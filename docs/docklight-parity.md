@@ -61,8 +61,9 @@ Status: [x] done, [~] partial, [ ] missing, [n/a] not applicable on Linux.
 - [x] Per-sequence hit counters (DL.GetReceiveCounter / ResetReceiveCounter)
 - [x] Checksum areas in send sequences (auto-calc per Checksum Specification)
 - [x] Checksum validation in receive sequences (OK / WRONG / BOTH actions)
-- [~] Sequence documentation text — comment column exists in the table
-- [~] 64-sequence capacity, sequence index display (0-based)
+- [x] Sequence documentation text — comment column + row tooltip in the table
+- [x] Sequence capacity/index display (0-based badges; capacity unbounded —
+      exceeds Docklight's 64)
 
 ## Checksums / CRC (Checksum Specification)
 - [x] MOD256, XOR, MOD65536, LRC (-MOD256), LRC-ASCII
@@ -113,7 +114,7 @@ not source-compatible, but the DL API names and semantics are replicated.
 - [x] DL.LoadProgramOptions / DL.SaveProgramOptions
 - [x] DL.PlaybackLogFile
 - [x] DL.SetContentsFilter (bridge → communication window)
-- [~] DL.SetUserOutput (signal exists; script output pane shows it as lines)
+- [x] DL.SetUserOutput (script output pane shows the lines)
 - [x] DL.SetWindowLayout ("S", "D", "SD", "")
 - [x] DL.ShellRun (QProcess-based)
 - [x] DL.UploadFile (A/H/D/B/R representations)
@@ -158,8 +159,9 @@ not source-compatible, but the DL API names and semantics are replicated.
       ReceiveLine, DL.Assert/DL.Fail, DL.Env, DL.SaveLog, DL.TimeDiff
 - [x] Headless runner: `lucidlight run` with --json NDJSON, exit codes
 - [x] Agent skill: `lucidlight skill [install]`
-- [x] Blocking-call parking: queued DL_OnReceive events run while a script
-      waits, mirroring Docklight's event timing
+- [x] Blocking-call parking: DL_OnReceive events detected during Pause /
+      WaitForSequence / Receive / SendSequence are queued and run after the
+      call returns, exactly per the manual's "Timing and Program Flow"
 
 ## HTML output / misc
 - [n/a] Docklight HTML output customization, window layout themes
