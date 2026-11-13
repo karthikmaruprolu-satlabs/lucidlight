@@ -59,7 +59,11 @@ sequence to auto-fire when the receive pattern matches.
 ## Data notation
 
 - Text mode: plain characters; `[0D]` inserts one hex byte; `[[` is a
-  literal `[`; `??` matches one unknown byte (receive patterns only).
+  literal `[`; `??` matches one unknown byte (receive patterns only);
+  `<CR>`, `<LF>`, `<NUL>`, `<13>` style control names also parse.
+- Send Sequence Parameter dialog: sequences with wildcard runs ask for
+  values before sending (GUI dialog; headless auto-answer via the
+  `LUCID_PARAMS` env var, values separated by `|`).
 - Hex mode: `48 65 6C` pairs, `??` wildcards allowed.
 - Dec mode: `72 101 108` decimal bytes, `??` wildcards allowed.
 
@@ -114,7 +118,8 @@ with no device attached.
 ## Desktop use
 
 `lucidlight` opens the GUI: Start (Space) begins communication, the send bar
-takes notation and Enter sends, Ctrl+F1–F12 fire sequences, the Script tab runs
-the same DL scripts interactively (Ctrl+R). Projects are `.llproj` JSON,
+takes notation and Enter sends, Ctrl+F1–F12 fire sequences, the camera
+button takes a Snapshot (window hidden until a trigger sequence fires),
+the Script tab runs the same DL scripts interactively (Ctrl+R). Projects are `.llproj` JSON,
 open/save through the portal file dialogs. The session autosaves to
 `~/.local/state/lucidlight/session.json`.

@@ -1,5 +1,5 @@
 pkgname=lucidlight
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc='Serial monitor, terminal, and test scripting for the desktop'
 arch=('x86_64' 'aarch64')
