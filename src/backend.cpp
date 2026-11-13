@@ -737,6 +737,9 @@ void Backend::scriptResetCounters(int id) {
 QString Backend::scriptDrainReceiveComments() {
     const QStringList drained = m_receiveComments;
     m_receiveComments.clear();
+    // Docklight stores at most 10000 receive comments.
+    if (m_receiveComments.size() > 10000)
+        m_receiveComments.remove(0, m_receiveComments.size() - 10000);
     return drained.join(QLatin1Char('\n'));
 }
 
@@ -925,6 +928,10 @@ QString Backend::scriptCommWindowData(const QString &representation) {
     QByteArray all;
     for (const auto &row : m_log->rows())
         all.append(row.data);
+    // Docklight caps the GetCommWindowData buffer at 128000 characters and
+    // drops the oldest data.
+    if (all.size() > 128000)
+        all = all.right(128000);
     if (representation.compare(QLatin1String("H"), Qt::CaseInsensitive) == 0)
         return DataFormat::toHex(all);
     if (representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0)

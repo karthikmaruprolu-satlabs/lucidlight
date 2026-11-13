@@ -49,7 +49,7 @@ private slots:
         QVERIFY(parsed.ok());
         QByteArray expected("[AB");
         expected.append(char(0));
-        expected.append(char(0));   // '??' is two one-byte wildcards now
+        expected.append(char(0));   // text mode: each '?' is one character
         QCOMPARE(parsed.bytes(), expected);
         QCOMPARE(parsed.wildcard().at(3), true);
         QCOMPARE(parsed.wildcard().at(4), true);
@@ -60,8 +60,7 @@ private slots:
         const auto parsed = DataFormat::parse("48 65 ?? 6C", DataFormat::Format::Hex);
         QVERIFY(parsed.ok());
         QByteArray expected("He");
-        expected.append(char(0));
-        expected.append(char(0));   // '??' is two one-byte wildcards now
+        expected.append(char(0));   // '??' is one wildcard byte, like Docklight
         expected.append('l');
         QCOMPARE(parsed.bytes(), expected);
         QCOMPARE(parsed.wildcard().at(2), true);
@@ -2027,6 +2026,56 @@ private slots:
                  + " rows=" + rows + " toast=" + toastText));
         QCOMPARE(seen.mid(0, 4), seen.mid(seen.size() - 4, 4));
         QCOMPARE(seen.mid(0, 2), QByteArray("\x01\x04", 2));
+    }
+
+    void receiveSequenceChecksumValidation()
+    {
+        // Receive sequences validate checksums per the manual: mode 0 = only
+        // correct checksums match, 1 = only wrong ones, 2 = both.
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        const int row = backend.sequences()->add(
+            QVariantMap{{"name", "RXCRC"}, {"isSend", false}, {"format", 1},
+                        {"data", "55 AA ?? ??"}, {"checksumSpec", "CRC-MODBUS"},
+                        {"checksumMode", 2}, {"comment", "HIT %_L"}});
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        // A valid CRC-MODBUS frame (55 AA 01) and a broken one.
+        const quint16 c = [] {
+            quint16 v = 0xFFFF;
+            const uchar data[3] = {0x55, 0xAA, 0x01};
+            for (uchar b : data) {
+                v ^= b;
+                for (int bit = 0; bit < 8; ++bit)
+                    v = (v & 1) ? (v >> 1) ^ 0xA001 : v >> 1;
+            }
+            return v;   // Modbus sends the low byte first
+        }();
+        QCOMPARE(Checksum::compute("CRC-MODBUS", QByteArray("\x55\xAA\x01", 3)),
+                 QByteArray(1, char(c >> 8)) + QByteArray(1, char(c & 0xFF)));
+        const char good[5] = {char(0x55), char(0xAA), char(0x01),
+                              char(c & 0xFF), char(c >> 8)};
+        const char bad[5] = {char(0x55), char(0xAA), char(0x01), char(0), char(0)};
+
+        ::write(master, good, 5);
+        QTest::qWait(200);
+        // Events (port opened, comm started) plus RX row and HIT comment.
+        const int afterGood = backend.log()->count();
+        QVERIFY2(afterGood >= 4, qPrintable(QString::number(afterGood)));
+
+        ::write(master, bad, 5);
+        QTest::qWait(200);
+        // BOTH mode counts the broken frame as a hit as well: +RX +comment.
+        QCOMPARE(backend.log()->count(), afterGood + 2);
+
+        backend.comm()->stop();
+        if (master >= 0)
+            ::close(master);
     }
 
     void vbscriptSamplesRunUnchanged()

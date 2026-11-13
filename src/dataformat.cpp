@@ -179,12 +179,10 @@ ParsedBytes DataFormat::parse(const QString &input, Format format) {
                 continue;
             }
             if (token == QLatin1String("??")) {
-                // Compatibility: two one-byte wildcards.
-                for (int k = 0; k < 2; ++k) {
-                    ParsedBytes::Element e;
-                    e.kind = ParsedBytes::Element::WildOne;
-                    result.elements.append(e);
-                }
+                // Docklight shows one wildcard byte as "??" in HEX notation.
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildOne;
+                result.elements.append(e);
                 continue;
             }
             if (token.size() % 2 != 0) {
@@ -260,11 +258,10 @@ ParsedBytes DataFormat::parse(const QString &input, Format format) {
                 continue;
             }
             if (token == QLatin1String("??")) {
-                for (int k = 0; k < 2; ++k) {
-                    ParsedBytes::Element e;
-                    e.kind = ParsedBytes::Element::WildOne;
-                    result.elements.append(e);
-                }
+                // Docklight shows one wildcard byte as "??" in DEC notation.
+                ParsedBytes::Element e;
+                e.kind = ParsedBytes::Element::WildOne;
+                result.elements.append(e);
                 continue;
             }
             bool ok = false;
