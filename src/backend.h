@@ -41,6 +41,9 @@ class Backend : public QObject {
     // Docklight's "additional date/time stamp": period in seconds for the
     // clock stamps written into the communication window, 0 = off.
     Q_PROPERTY(int clockStampInterval READ clockStampInterval WRITE setClockStampInterval NOTIFY clockStampChanged)
+    // Docklight's Tools > Keyboard Console: typed keys go straight to the
+    // port (Send/Receive mode only).
+    Q_PROPERTY(bool keyboardConsole READ keyboardConsole WRITE setKeyboardConsole NOTIFY keyboardConsoleChanged)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -66,6 +69,8 @@ public:
     void setRunOnOpen(bool on);
     int clockStampInterval() const { return m_clockStampInterval; }
     void setClockStampInterval(int seconds);
+    bool keyboardConsole() const { return m_keyboardConsole; }
+    void setKeyboardConsole(bool on);
     void runScriptFile(const QString &path);
     // Runs script text directly (the script panel calls scripts.run).
     Q_INVOKABLE void runScript(const QString &source);
@@ -91,6 +96,7 @@ public:
     Q_INVOKABLE QString parseError(const QString &text, int format) const;
     Q_INVOKABLE QString previewBytes(const QString &text, int format) const;
     Q_INVOKABLE void copyToClipboard(const QString &text);
+    Q_INVOKABLE QString clipboardText() const;
 
     // Extra bytes above the last log entry, for the highlight pass.
     static constexpr int NoChannel = -1;
@@ -138,6 +144,7 @@ public slots:
 
 signals:
     void clockStampChanged();
+    void keyboardConsoleChanged();
     void stateChanged();
     void scriptChanged();
     void toast(const QString &text);
@@ -201,6 +208,7 @@ private:
     QTimer m_repeatTimer;
     QTimer m_clockTimer;
     int m_clockStampInterval = 0;   // seconds, 0 = off
+    bool m_keyboardConsole = false;
     QHash<int, qint64> m_nextRepeatAt;
     QElapsedTimer m_repeatClock;
 };

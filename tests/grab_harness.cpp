@@ -1,6 +1,7 @@
 // Offscreen harness: loads the real QML, drives it, and grabs the window to
 // a PNG so agents can see what the user would see.
 #include <QGuiApplication>
+#include <QKeyEvent>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -59,6 +60,27 @@ int main(int argc, char *argv[]) {
                             viewCount, backend.log()->count());
                     std::_Exit(3);
                 }
+            }
+        }
+        // LUCID_KBD=1: exercise the keyboard console — start communication,
+        // focus the communication window, and post real key events. The grab
+        // then shows the typed characters as TX rows.
+        if (!qEnvironmentVariableIsEmpty("LUCID_KBD")) {
+            backend.setKeyboardConsole(true);
+            // A UDP peer needs no partner, so TX rows appear without a device.
+            backend.channelA()->setDevice("UDP:127.0.0.1:47111");
+            backend.toggleComm();
+            if (auto *view = window->findChild<QQuickItem *>("commView")) {
+                QMetaObject::invokeMethod(view, "forceActiveFocus");
+                auto sendKey = [&window](int key, const QString &text, Qt::KeyboardModifiers mods) {
+                    QKeyEvent press(QEvent::KeyPress, key, mods, text);
+                    QKeyEvent release(QEvent::KeyRelease, key, mods, text);
+                    QCoreApplication::sendEvent(window, &press);
+                    QCoreApplication::sendEvent(window, &release);
+                };
+                sendKey(Qt::Key_H, "h", Qt::NoModifier);
+                sendKey(Qt::Key_I, "i", Qt::NoModifier);
+                sendKey(Qt::Key_Return, "\r", Qt::NoModifier);
             }
         }
         // LUCID_TAB=script shows the script workbench in the grab.

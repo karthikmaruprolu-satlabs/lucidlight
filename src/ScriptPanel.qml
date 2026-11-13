@@ -236,6 +236,10 @@ ColumnLayout {
     Connections {
         target: backend.scripts
         function onOutputLine(line, error) {
+            if (line === "\u0001CLEAR") {
+                outputModel.clear();
+                return;
+            }
             outputModel.append({ line: line, isError: error });
             if (outputModel.count > 500)
                 outputModel.remove(0, 100);

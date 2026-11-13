@@ -131,6 +131,17 @@ void Backend::setClockStampInterval(int seconds) {
     emit clockStampChanged();
 }
 
+void Backend::setKeyboardConsole(bool on) {
+    if (on == m_keyboardConsole)
+        return;
+    m_keyboardConsole = on;
+    emit keyboardConsoleChanged();
+}
+
+QString Backend::clipboardText() const {
+    return QGuiApplication::clipboard()->text();
+}
+
 void Backend::setRunOnOpen(bool on) {
     if (on == m_runOnOpen)
         return;
@@ -993,9 +1004,8 @@ void Backend::runScriptFile(const QString &path) {
         emit toast(tr("Cannot open script %1").arg(path));
         return;
     }
-    const QString code = QString::fromUtf8(file.readAll());
     emit toast(tr("Startup script: %1").arg(path));
-    m_runner->run(code);
+    m_runner->runFile(path);
 }
 
 QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {

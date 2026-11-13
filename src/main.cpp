@@ -123,7 +123,12 @@ int runHeadless(const QString &projectPath, const QString &scriptPath, int durat
                              scriptError = error;
                              loop.quit();
                          });
-        backend.scripts()->run(scriptCode);
+        // Run via the runner's file path when the script came from a file,
+        // so #include resolves against the script's directory.
+        if (!scriptPath.isEmpty())
+            backend.scripts()->runFile(scriptPath);
+        else
+            backend.scripts()->run(scriptCode);
         // Both timers race: whoever finishes first ends the run.
         loop.exec();
         backend.scripts()->stop();

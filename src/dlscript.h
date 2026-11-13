@@ -280,6 +280,11 @@ public:
                                   const QString &defaultText = QString());
     Q_INVOKABLE void SetUserOutput(const QString &text, bool rtfFormat = false,
                                    bool append = true, bool readFromFile = false);
+    // Docklight's name for the same user output tab.
+    Q_INVOKABLE void SetWindowOutput(const QString &text, bool rtfFormat = false,
+                                     bool append = true, bool readFromFile = false) {
+        SetUserOutput(text, rtfFormat, append, readFromFile);
+    }
     Q_INVOKABLE void SetWindowLayout(const QString &layout = QStringLiteral("SD"));
     Q_INVOKABLE void Quit();
 
@@ -337,6 +342,9 @@ public:
     bool running() const { return m_running; }
     DLScriptEngine *engine() const { return m_engine; }
     Q_INVOKABLE void run(const QString &code);
+    // Runs a script from a file; the file's directory is the base for
+    // #include directives, like Docklight's script preprocessor.
+    Q_INVOKABLE void runFile(const QString &path);
     Q_INVOKABLE void stop();
 
 signals:

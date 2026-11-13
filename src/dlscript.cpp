@@ -1140,18 +1140,59 @@ QString DLObject::InputBox2(const QString &prompt, const QString &title,
     return m_host->m_inputResult;
 }
 
+// Minimal RTF to plain text: drops control words and group braces, keeps
+// the readable characters, so RTF documents stay legible in the output pane.
+namespace {
+QString stripRtf(const QString &rtf) {
+    QString out;
+    bool escaping = false;
+    for (int i = 0; i < rtf.size(); ++i) {
+        const QChar c = rtf.at(i);
+        if (escaping) {
+            if (c.isSpace()) {
+                escaping = false;
+            } else if (c.isLetterOrNumber() || c == '\'' || c == '-') {
+                continue;
+            } else {
+                if (c == '\\') {
+                    // One control word ends where the next begins; do not
+                    // emit the backslash itself.
+                    escaping = true;
+                    continue;
+                }
+                escaping = false;
+                if (c != '*')
+                    out.append(c);
+            }
+            continue;
+        }
+        if (c == '\\') {
+            escaping = true;
+        } else if (c == '{' || c == '}') {
+            continue;
+        } else {
+            out.append(c);
+        }
+    }
+    return out;
+}
+}  // namespace
+
 void DLObject::SetUserOutput(const QString &text, bool rtfFormat, bool append,
                              bool readFromFile) {
-    Q_UNUSED(rtfFormat)
     QString content = text;
+    if (rtfFormat && !readFromFile)
+        content = stripRtf(content);
     if (readFromFile) {
         QFile file(text);
         content = file.open(QIODevice::ReadOnly | QIODevice::Text)
                       ? QString::fromUtf8(file.readAll())
                       : QString();
+        if (rtfFormat)
+            content = stripRtf(content);
     }
     if (!append)
-        emit m_host->outputLine(QStringLiteral("\x01CLEAR"), false);
+        emit m_host->outputLine(QStringLiteral("\x01" "CLEAR"), false);
     if (!content.isEmpty()) {
         const QStringList lines = content.split('\n');
         for (const QString &line : lines)
@@ -1421,6 +1462,67 @@ DLScriptEngine::Snapshot ScriptRunner::snapshot() const {
         snap.entries.append(entry);
     }
     return snap;
+}
+
+// Docklight's #include directive: splice the referenced file into the
+// source at the directive's position. Relative paths resolve against the
+// including file's directory, then the working directory; the .pts
+// extension is optional. Cycles are cut off with an error comment.
+namespace {
+QString preprocessIncludes(QString code, const QDir &baseDir, int depth, QStringList *notes) {
+    if (depth > 8) {
+        notes->append(QStringLiteral("#include nesting too deep"));
+        return code;
+    }
+    static const QRegularExpression includeRe(
+        QStringLiteral("^[ \\t]*#include[ \\t]+(?:\"([^\"]+)\"|(\\S+))[ \\t]*$"),
+        QRegularExpression::MultilineOption);
+    QString out;
+    qsizetype pos = 0;
+    auto match = includeRe.globalMatch(code);
+    // Rebuild line by line so includes splice in order.
+    qsizetype lastEnd = 0;
+    while (match.hasNext()) {
+        const auto m = match.next();
+        out += code.mid(lastEnd, m.capturedStart() - lastEnd);
+        lastEnd = m.capturedEnd();
+        QString path = m.captured(1).isEmpty() ? m.captured(2) : m.captured(1);
+        if (!path.endsWith(QStringLiteral(".pts")) && !path.endsWith(QStringLiteral(".js"))
+            && !QFileInfo(path).exists())
+            path += QStringLiteral(".pts");
+        QString resolved = path;
+        if (QFileInfo(path).isRelative()) {
+            const QString inBase = baseDir.filePath(path);
+            if (QFile::exists(inBase))
+                resolved = inBase;
+        }
+        QFile file(resolved);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            notes->append(QStringLiteral("#include file not found: %1").arg(path));
+            out += QStringLiteral("// #include failed: %1").arg(path);
+            continue;
+        }
+        const QString included = QString::fromUtf8(file.readAll());
+        out += preprocessIncludes(included, QFileInfo(resolved).absolutePath(), depth + 1, notes);
+    }
+    out += code.mid(lastEnd);
+    return out;
+}
+}  // namespace
+
+void ScriptRunner::runFile(const QString &path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        emit outputLine(tr("Cannot open script %1").arg(path), true);
+        return;
+    }
+    const QString code = QString::fromUtf8(file.readAll());
+    const QString dir = QFileInfo(path).absolutePath();
+    QStringList notes;
+    const QString processed = preprocessIncludes(code, dir, 0, &notes);
+    for (const QString &note : notes)
+        emit outputLine(note, true);
+    run(processed);
 }
 
 void ScriptRunner::run(const QString &code) {

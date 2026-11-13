@@ -77,6 +77,9 @@ ApplicationWindow {
         while (item) {
             if (item instanceof TextInput || item instanceof TextEdit)
                 return true;
+            if (item instanceof ListView && item.objectName === "commView"
+                && item.activeFocus && backend.keyboardConsole)
+                return true;   // keyboard console owns the keystrokes
             item = item.parent;
         }
         return false;
@@ -497,6 +500,36 @@ ApplicationWindow {
                             boundsBehavior: Flickable.StopAtBounds
                             ScrollBar.vertical: ScrollBar {}
 
+                            // Docklight's Keyboard Console: with the tool on,
+                            // clicking into the window and typing transmits
+                            // directly through the port.
+                            focus: backend.keyboardConsole
+                            activeFocusOnTab: backend.keyboardConsole
+                            TapHandler {
+                                enabled: backend.keyboardConsole
+                                onTapped: commView.forceActiveFocus()
+                            }
+                            Keys.onPressed: (event) => {
+                                if (!backend.keyboardConsole)
+                                    return;
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                    backend.sendText("\r\n", 0);
+                                    event.accepted = true;
+                                } else if (event.key === Qt.Key_Escape) {
+                                    backend.sendText("\u001B", 0);
+                                    event.accepted = true;
+                                } else if (event.key === Qt.Key_V && event.modifiers & Qt.ControlModifier) {
+                                    let clip = backend.clipboardText();
+                                    if (clip.length > 1024)
+                                        clip = clip.substring(0, 1024);
+                                    backend.sendText(clip, 0);
+                                    event.accepted = true;
+                                } else if (event.text.length === 1 && !event.modifiers) {
+                                    backend.sendText(event.text, 0);
+                                    event.accepted = true;
+                                }
+                            }
+
                             property bool atEnd: true
                             onContentYChanged: atEnd = atYEnd
                             onCountChanged: if (atEnd) positionViewAtEnd()
@@ -697,6 +730,14 @@ ApplicationWindow {
         MenuItem {
             text: qsTr("Print communication window…") + "  (Ctrl+P)"
             onTriggered: printLog()
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("Keyboard Console On") + "  (Ctrl+T)"
+            checkable: true
+            checked: backend.keyboardConsole
+            enabled: backend.commStateText.indexOf("single") >= 0
+            onTriggered: backend.keyboardConsole = checked
         }
         MenuSeparator {}
         MenuItem {

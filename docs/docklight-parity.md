@@ -163,3 +163,8 @@ not source-compatible, but the DL API names and semantics are replicated.
 
 ## HTML output / misc
 - [n/a] Docklight HTML output customization, window layout themes
+
+## Recently closed (0.2.x)
+- [x] #include directive — script preprocessor splices .pts/.js files, relative to the script's directory then cwd, cycle-guarded
+- [x] Keyboard Console — Tools menu toggle (Ctrl+T), Send/Receive mode only; typed keys transmit directly, Enter = CR+LF, ESC = 0x1B, Ctrl+V sends clipboard (1024-char cap)
+- [x] DL.SetWindowOutput — alias of SetUserOutput with full signature; RTF input stripped to plain text; \u0001CLEAR marker clears the output pane (also fixed a C++ escape bug that broke the marker)
