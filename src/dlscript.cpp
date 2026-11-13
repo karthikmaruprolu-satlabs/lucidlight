@@ -1,5 +1,7 @@
 #include "dlscript.h"
 
+#include <QGuiApplication>
+
 #include <QBuffer>
 #include <QMetaMethod>
 #include <QDateTime>
@@ -1252,9 +1254,19 @@ QString DLObject::GetEnvironment(const QString &name) {
 }
 
 int DLObject::GetKeyState(int virtKey) {
-    Q_UNUSED(virtKey)
-    // Keyboard state inspection is not portable; Lucidlight reports "not
-    // pressed" (0). Documented deviation from the Windows original.
+    // Partial parity: Windows virtual-key codes for the modifier keys map to
+    // the live keyboard modifiers (Docklight's classic use case is aborting
+    // a loop when the user holds a key). Non-modifier keys stay 0 — polling
+    // arbitrary key states needs window-system access beyond Qt.
+    const Qt::KeyboardModifiers mods = QGuiApplication::keyboardModifiers();
+    switch (virtKey) {
+    case 16: return int(mods & Qt::ShiftModifier) ? -1 : 0;   // VK_SHIFT
+    case 17: return int(mods & Qt::ControlModifier) ? -1 : 0; // VK_CONTROL
+    case 18: return int(mods & Qt::AltModifier) ? -1 : 0;     // VK_MENU (Alt)
+    case 20: return int(mods & Qt::KeypadModifier) ? -1 : 0;  // approx VK_CAPITAL
+    default:
+        break;
+    }
     return 0;
 }
 

@@ -30,6 +30,8 @@ class Backend : public QObject {
     Q_PROPERTY(bool snapshotArmed READ snapshotArmed NOTIFY stateChanged)
     Q_PROPERTY(bool dirty READ dirty WRITE setDirty NOTIFY stateChanged)
     Q_PROPERTY(QString projectPath READ projectPath WRITE setProjectPath NOTIFY stateChanged)
+    // Docklight's recent-files list (File menu), persisted across sessions.
+    Q_PROPERTY(QStringList recentFiles READ recentFiles NOTIFY recentFilesChanged)
     Q_PROPERTY(QString commStateText READ commStateText NOTIFY stateChanged)
 
     Q_PROPERTY(CommManager *comm READ comm CONSTANT)
@@ -63,6 +65,9 @@ public:
     void setDirty(bool dirty);
     QString projectPath() const { return m_projectPath; }
     void setProjectPath(const QString &path);
+    QStringList recentFiles() const { return m_recentFiles; }
+    Q_INVOKABLE void clearRecentFiles();
+    void pushRecentFile(const QString &path);
     QString commStateText() const;
 
     CommManager *comm() const { return m_comm; }
@@ -179,6 +184,7 @@ signals:
     void clockStampChanged();
     void keyboardConsoleChanged();
     void stateChanged();
+    void recentFilesChanged();
     void scriptChanged();
     void externalEditorChanged();
     void toast(const QString &text);
@@ -249,6 +255,7 @@ private:
     int m_clockStampInterval = 0;
     bool m_dialogPause = false;
     bool m_snapshotArmed = false;
+    QStringList m_recentFiles;
     bool m_snapshotTriggered = false;
     qint64 m_snapshotRowsBefore = 0;
     qint64 m_snapshotRowsSeen = 0;

@@ -85,6 +85,7 @@ DL.Comment("note"); DL.ClearComm(); DL.ShowMessage("hello");
 DL.HexToStr(h); DL.StrToHex(s); DL.HexToDec(h); DL.DecToHex(n); DL.Asc(c); DL.Chr(n);
 DL.SendBreak(200); DL.SetDTR(true); DL.SetRTS(false);
 DL.GetCTS(); DL.GetDSR(); DL.GetDCD(); DL.GetRI();
+DL.GetKeyState(17);                  // modifier key state (Shift=16, Ctrl=17, Alt=18)
 DL.StartTime(); DL.TimeDiff();        // ms since script start / seconds
 DL.Env("DEVICE", "/dev/ttyUSB0");     // read environment variables
 DL.SaveLog("/tmp/capture.log");       // dump the communication window

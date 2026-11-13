@@ -782,6 +782,27 @@ ApplicationWindow {
             text: qsTr("Open…") + "  (Ctrl+O)"
             onTriggered: openProject()
         }
+        Menu {
+            id: recentMenu
+            title: qsTr("Open Recent")
+            enabled: backend.recentFiles.length > 0
+            Instantiator {
+                id: recentItems
+                model: backend.recentFiles
+                delegate: MenuItem {
+                    text: String(modelData).split("/").pop()
+                           + "  \u2014  " + String(modelData)
+                    onTriggered: backend.openProjectFrom(String(modelData))
+                }
+                onObjectAdded: (index, object) => recentMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => recentMenu.removeItem(object)
+            }
+            MenuSeparator {}
+            MenuItem {
+                text: qsTr("Clear list")
+                onTriggered: backend.clearRecentFiles()
+            }
+        }
         MenuItem {
             text: qsTr("Save") + "  (Ctrl+S)"
             onTriggered: saveProject()

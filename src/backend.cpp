@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QProcess>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QPdfWriter>
@@ -1509,6 +1510,20 @@ void Backend::newProject() {
     setDirty(false);
 }
 
+
+void Backend::pushRecentFile(const QString &path) {
+    m_recentFiles.removeAll(path);
+    m_recentFiles.prepend(path);
+    while (m_recentFiles.size() > 10)
+        m_recentFiles.removeLast();
+    emit recentFilesChanged();
+}
+
+void Backend::clearRecentFiles() {
+    m_recentFiles.clear();
+    emit recentFilesChanged();
+}
+
 void Backend::openProjectFrom(const QString &path) {
     if (path.isEmpty())
         return;
@@ -1534,6 +1549,7 @@ void Backend::openProjectFrom(const QString &path) {
     }
     setScriptSource(script);
     setProjectPath(path);
+    pushRecentFile(path);
     m_runOnOpen = runOnOpen;
     emit stateChanged();
     setDirty(false);
@@ -1565,6 +1581,7 @@ void Backend::saveProjectTo(const QString &path) {
         return;
     }
     setProjectPath(finalPath);
+    pushRecentFile(finalPath);
     setDirty(false);
     emit toast(tr("Project saved"));
 }
@@ -1578,8 +1595,12 @@ void Backend::saveSession() {
         return;
     QJsonObject state =
         Project::save(m_comm, m_a, m_b, m_sequences, m_scriptSource, m_log, m_runOnOpen);
-    // Program option (not part of the project file): the external editor.
+    // Program options (not part of the project file).
     state["externalEditor"] = m_externalEditor;
+    QJsonArray recent;
+    for (const QString &f : m_recentFiles)
+        recent.append(f);
+    state["recentFiles"] = recent;
     file.write(QJsonDocument(state).toJson(QJsonDocument::Compact));
     file.commit();
     setDirty(false);
@@ -1598,6 +1619,9 @@ bool Backend::loadSession() {
         return false;
     setScriptSource(script);
     m_externalEditor = state.value("externalEditor").toString();
+    m_recentFiles.clear();
+    for (const QJsonValue &v : state.value("recentFiles").toArray())
+        m_recentFiles.append(v.toString());
     setProjectPath(QString());
     setDirty(false);
     return true;

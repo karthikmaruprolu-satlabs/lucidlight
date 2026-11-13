@@ -180,6 +180,12 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] Recent files menu (File > Open Recent) — newest-first, deduplicated,
+      10 entries, persisted across sessions, with a Clear list action
+- [x] DL.GetKeyState partial parity upgrade — VK_SHIFT (16), VK_CONTROL (17),
+      VK_MENU (18) now report the live keyboard modifier state (-1 pressed /
+      0 up), covering Docklight's classic "abort loop when a key is held"
+      use case; other virtual keys remain documented as 0
 - [x] UNIX socket receive fix — QLocalSocket readyRead was never wired, so
       UNIX:/UNIXSERVER: links could send but silently never receive (the old
       test passed on a false positive: its "RX" assertion matched the TX

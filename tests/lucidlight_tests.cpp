@@ -2011,6 +2011,27 @@ private slots:
 
 
 
+
+    void recentFilesTrackOpenAndSave()
+    {
+        // Docklight's File > Open Recent list: newest first, deduplicated,
+        // persisted with the session.
+        Backend backend;
+        QTemporaryDir dir;
+        const QString p1 = dir.path() + "/one.llproj";
+        const QString p2 = dir.path() + "/two.llproj";
+        backend.saveProjectTo(p1);
+        backend.saveProjectTo(p2);
+        QCOMPARE(backend.recentFiles().size(), 2);
+        QCOMPARE(backend.recentFiles().first(), p2);
+        // Re-saving p1 moves it to the front without duplicating.
+        backend.saveProjectTo(p1);
+        QCOMPARE(backend.recentFiles().size(), 2);
+        QCOMPARE(backend.recentFiles().first(), p1);
+        backend.clearRecentFiles();
+        QCOMPARE(backend.recentFiles().size(), 0);
+    }
+
     void onReceiveHandlerCaseInsensitive()
     {
         // VBScript is case-insensitive: "sub dl_onreceive(...)" and even
