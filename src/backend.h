@@ -154,7 +154,7 @@ signals:
 private slots:
     void handleIncoming(int channel, const QByteArray &data);
     void handleTransmitted(int channel, const QByteArray &data);
-    void handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens);
+    void handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens, int channel);
     void checkRepeats();
     void scriptFinished(bool ok, const QString &error);
 
@@ -167,7 +167,7 @@ private:
                            DataFormat::Format paramFormat,
                            QVector<ParsedBytes::Element> *out, QString *error);
     void wireDirtyTracking();
-    void applyTrigger(const Sequence *receiveSequence, const QByteArray &matched);
+    void applyTrigger(const Sequence *receiveSequence, const QByteArray &matched, int channel);
     void syncMatcher();
     QString expandCommentMacros(const QString &text, const Sequence *seq,
                                 const QByteArray &received, int channel);
@@ -184,7 +184,9 @@ private:
     ScriptRunner *m_runner;
     PortEnumerator *m_ports;
     PortalPicker *m_picker;
-    SequenceMatcher m_matcher;
+    // One matcher per main port: a pattern must never match across a
+    // channel boundary (Docklight matches each port's stream separately).
+    SequenceMatcher m_matchers[2];
     FileLogger m_logger;
 
     bool m_dirty = false;

@@ -46,7 +46,8 @@ public:
     // Decodes PARMRK escapes: "\377 \0 X" is a byte received with a parity
     // error and becomes the ParityErrorChar; "\377 \377" is a real 0xFF
     // data byte. Public so tests can exercise it without hardware.
-    static QByteArray decodeParity(const QByteArray &raw, int parityErrorChar);
+    static QByteArray decodeParity(const QByteArray &raw, int parityErrorChar,
+                                   QByteArray *tail = nullptr);
 
 private:
     void readReady();
@@ -59,6 +60,7 @@ private:
     int m_parity = 0;
     int m_parityErrorChar = int('?');
     bool m_decodeParity = false;   // PARMRK decoding active (parity + error char)
+    QByteArray m_parityTail;       // incomplete PARMRK escape carried across reads
     termios m_savedTermios {};
     bool m_savedValid = false;
     QSocketNotifier *m_notifier = nullptr;

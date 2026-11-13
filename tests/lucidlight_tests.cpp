@@ -1612,6 +1612,138 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(path), 1000);
     }
 
+    void parityDecoderTailAcrossReads()
+    {
+        // PARMRK escapes can split across read() calls; the decoder must
+        // carry the incomplete tail so a triplet is never misread as data.
+        // All byte arrays are built explicitly: QByteArray(const char *)
+        // stops at an embedded 0x00.
+        auto bytes = [](std::initializer_list<char> list) {
+            QByteArray out;
+            for (char c : list)
+                out.append(c);
+            return out;
+        };
+        QByteArray tail;
+
+        // "A" + a lone trailing 0xFF: held back (triplet start or doubled pair).
+        QCOMPARE(SerialLink::decodeParity(bytes({'A', '\xFF'}), int('?'), &tail),
+                 QByteArray("A"));
+        QCOMPARE(tail, bytes({'\xFF'}));
+
+        // The tail completes an error triplet with the next read (the real
+        // read path prepends the carried tail, like readReady does).
+        QCOMPARE(SerialLink::decodeParity(tail + bytes({'\x00', 'B'}), int('?'), &tail),
+                 QByteArray("?"));
+        QVERIFY(tail.isEmpty());
+
+        // A complete doubled pair at the end must NOT be held back.
+        QCOMPARE(SerialLink::decodeParity(bytes({'\xFF', '\xFF'}), int('?'), &tail),
+                 bytes({'\xFF'}));
+        QVERIFY(tail.isEmpty());
+
+        // "FF 00" at the end is a triplet missing its byte: hold both.
+        QCOMPARE(SerialLink::decodeParity(bytes({'A', '\xFF', '\x00'}), int('?'), &tail),
+                 QByteArray("A"));
+        QCOMPARE(tail, bytes({'\xFF', '\x00'}));
+        QCOMPARE(SerialLink::decodeParity(tail + bytes({'C'}), int('?'), &tail),
+                 QByteArray("?"));
+        QVERIFY(tail.isEmpty());
+
+        // But "FF FF 00" is complete data (escaped 0xFF, then 0x00): the FF
+        // before the 00 was consumed as the second half of the pair.
+        QCOMPARE(SerialLink::decodeParity(bytes({'\xFF', '\xFF', '\x00'}), int('?'), &tail),
+                 bytes({'\xFF', '\x00'}));
+        QVERIFY(tail.isEmpty());
+
+        // An odd run of three 0xFF holds exactly one.
+        QCOMPARE(SerialLink::decodeParity(bytes({'\xFF', '\xFF', '\xFF'}), int('?'), &tail),
+                 bytes({'\xFF'}));
+        QCOMPARE(tail, bytes({'\xFF'}));
+        // The lone FF plus the next byte 'D': a plain 0xFF data byte and 'D'.
+        QCOMPARE(SerialLink::decodeParity(tail + bytes({'D'}), int('?'), &tail),
+                 bytes({'\xFF', 'D'}));
+        QVERIFY(tail.isEmpty());
+
+        // Plain data passes through with no tail.
+        QCOMPARE(SerialLink::decodeParity(QByteArray("PING"), int('?'), &tail),
+                 QByteArray("PING"));
+        QVERIFY(tail.isEmpty());
+    }
+
+    void matcherPerChannelNoCrossMatches()
+    {
+        // Each port's stream is matched separately: "PI" arriving on
+        // channel A and "NG" on channel B must never assemble "PING".
+        char slaveA[128], slaveB[128];
+        int masterA = makePty(slaveA, sizeof(slaveA));
+        int masterB = makePty(slaveB, sizeof(slaveB));
+        QVERIFY(masterA >= 0 && masterB >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slaveA);
+        backend.channelB()->setDevice(slaveB);
+        backend.comm()->setMode(CommManager::Monitor);
+        backend.sequences()->add(QVariantMap{{"name", "Watch"}, {"isSend", false},
+                                             {"format", 0}, {"data", "PING"},
+                                             {"trigger", true}, {"comment", "matched!"}});
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        QCOMPARE(::write(masterA, "PI", 2), 2);
+        QTest::qWait(50);
+        QCOMPARE(::write(masterB, "NG", 2), 2);
+        QTest::qWait(400);
+
+        int comments = 0;
+        for (int i = 0; i < backend.log()->count(); ++i)
+            if (backend.log()->textAt(i).contains("matched!"))
+                ++comments;
+        QCOMPARE(comments, 0);
+
+        backend.comm()->stop();
+        ::close(masterA);
+        ::close(masterB);
+    }
+
+    void commentMacrosReportChannelTwo()
+    {
+        char slave[128], dummy[128];
+        int master = makePty(slave, sizeof(slave));
+        int masterDummy = makePty(dummy, sizeof(dummy));
+        QVERIFY(master >= 0 && masterDummy >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(dummy);   // port A must be set to start
+        backend.channelB()->setDevice(slave);
+        backend.comm()->setMode(CommManager::Monitor);
+        backend.sequences()->add(QVariantMap{{"name", "Watch"}, {"isSend", false},
+                                             {"format", 0}, {"data", "PING"},
+                                             {"trigger", true}, {"comment", "ch %_C dir %_X"}});
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        QCOMPARE(::write(master, "PING", 4), 4);
+        QElapsedTimer timer;
+        timer.start();
+        QString logged;
+        while (timer.elapsed() < 1500) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            for (int i = 0; i < backend.log()->count(); ++i) {
+                const QString text = backend.log()->textAt(i);
+                if (text.startsWith("ch "))
+                    logged = text;
+            }
+            if (!logged.isEmpty())
+                break;
+        }
+        QCOMPARE(logged, QString("ch 2 dir RX"));
+
+        backend.comm()->stop();
+        ::close(master);
+        ::close(masterDummy);
+    }
+
     void commentMacrosExpandOnMatch()
     {
         char slave[128];

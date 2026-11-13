@@ -44,7 +44,8 @@ Backend::Backend(QObject *parent)
             m_log->startClock();
             m_repeatClock.start();
             m_nextRepeatAt.clear();
-            m_matcher.reset();
+            m_matchers[0].reset();
+            m_matchers[1].reset();
             if (m_clockStampInterval > 0)
                 m_clockTimer.start(m_clockStampInterval * 1000);
         } else {
@@ -54,7 +55,12 @@ Backend::Backend(QObject *parent)
     });
     connect(m_comm, &CommManager::countersChanged, this, &Backend::stateChanged);
     connect(m_log, &CommLog::displayChanged, this, &Backend::stateChanged);
-    connect(&m_matcher, &SequenceMatcher::matched, this, &Backend::handleTrigger);
+    for (int ch = 0; ch < 2; ++ch) {
+        connect(&m_matchers[ch], &SequenceMatcher::matched, this,
+                [this, ch](int sequenceId, const QVector<SequenceMatcher::Token> &tokens) {
+                    handleTrigger(sequenceId, tokens, ch);
+                });
+    }
     connect(m_sequences, &SequenceModel::sequenceChanged, this, &Backend::syncMatcher);
     syncMatcher();
 
@@ -147,7 +153,10 @@ void Backend::setScriptSource(const QString &source) {
 void Backend::handleIncoming(int channel, const QByteArray &data) {
     // The matcher may fire a trigger for this very burst; remember that so
     // the log row gets the highlight mark.
-    m_matcher.feed(data, QDateTime::currentMSecsSinceEpoch());
+    // Only the two main ports feed the receive matcher; side channels are
+    // script-driven and must not participate in pattern matching.
+    if (channel >= 0 && channel < 2)
+        m_matchers[channel].feed(data, QDateTime::currentMSecsSinceEpoch());
     const bool highlighted = m_pendingHighlight;
     m_pendingHighlight = false;
     m_log->append(CommLog::Rx, channel, data, highlighted);
@@ -161,7 +170,8 @@ void Backend::handleTransmitted(int channel, const QByteArray &data) {
                    QDateTime::currentMSecsSinceEpoch(), false);
 }
 
-void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens) {
+void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens,
+                            int channel) {
     m_pendingHighlight = true;
     QByteArray received;
     for (const SequenceMatcher::Token &t : tokens)
@@ -179,10 +189,10 @@ void Backend::handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token
             QMetaObject::invokeMethod(engine, "onReceiveEvent", Qt::QueuedConnection,
                                       Q_ARG(int, seq.id), Q_ARG(int, i),
                                       Q_ARG(QString, seq.name), Q_ARG(QByteArray, received),
-                                      Q_ARG(int, 1),
+                                      Q_ARG(int, channel + 1),
                                       Q_ARG(qint64, QDateTime::currentMSecsSinceEpoch()));
         }
-        applyTrigger(&seq, received);
+        applyTrigger(&seq, received, channel);
         break;
     }
 }
@@ -240,8 +250,8 @@ QString Backend::expandCommentMacros(const QString &text, const Sequence *seq,
         case 'T': replacement = QLocale().toString(QDateTime::currentDateTime(),
                                                     QStringLiteral("HH:mm:ss.zzz"));
             break;
-        case 'C': replacement = channel == 0 ? "1" : "2"; break;
-        case 'X': replacement = channel == 0 ? "TX" : "RX"; break;
+        case 'C': replacement = QString::number(channel + 1); break;
+        case 'X': replacement = "RX"; break;   // receive matches are always RX
         case 'I': replacement = QString::number(indexOfSequence(seq->id)); break;
         case 'N': replacement = seq->name; break;
         case 'A': replacement = dataText(DataFormat::Format::Text); break;
@@ -275,7 +285,8 @@ int Backend::indexOfSequence(int id) const {
     return -1;
 }
 
-void Backend::applyTrigger(const Sequence *receiveSequence, const QByteArray &matched) {
+void Backend::applyTrigger(const Sequence *receiveSequence, const QByteArray &matched,
+                           int matchChannel) {
     // Action: Answer — transmit one send sequence (wildcards not allowed).
     if (receiveSequence->replyToId >= 0) {
         for (const Sequence &candidate : m_sequences->sequences()) {
@@ -301,9 +312,8 @@ void Backend::applyTrigger(const Sequence *receiveSequence, const QByteArray &ma
     }
     // Action: Comment — macro-expanded text into the log.
     if (!receiveSequence->comment.isEmpty()) {
-        const int channel = m_comm->mode() == CommManager::Monitor ? 1 : 1;
         const QString expanded = expandCommentMacros(receiveSequence->comment, receiveSequence,
-                                                     matched, channel);
+                                                     matched, matchChannel);
         logComment(expanded);
         m_receiveComments.append(expanded);
     }
@@ -349,7 +359,8 @@ void Backend::syncMatcher() {
         }
         patterns.append(pattern);
     }
-    m_matcher.setPatterns(patterns);
+    m_matchers[0].setPatterns(patterns);
+    m_matchers[1].setPatterns(patterns);
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +379,9 @@ void Backend::toggleComm() {
         if (m_clockStampInterval > 0)
             m_clockTimer.start(m_clockStampInterval * 1000);
     } else {
-        emit toast(m_comm->link(0)->lastError());
+        // start() can fail before the links exist (empty device).
+        CommLink *linkA = m_comm->link(0);
+        emit toast(linkA ? linkA->lastError() : tr("Communication could not be started"));
     }
 }
 
@@ -654,8 +667,10 @@ void Backend::scriptResetCounters(int id) {
         m_receiveCounts.clear();
     else
         m_receiveCounts.remove(id);
-    if (id < 0)
-        m_matcher.reset();
+    if (id < 0) {
+        m_matchers[0].reset();
+        m_matchers[1].reset();
+    }
 }
 
 QString Backend::scriptDrainReceiveComments() {

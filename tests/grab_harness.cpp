@@ -4,6 +4,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QTimer>
 #include <cstdlib>
@@ -48,6 +49,17 @@ int main(int argc, char *argv[]) {
             backend.log()->append(CommLog::Rx, 0, QByteArray::fromHex("48656C6C6F2C20776F726C642100"));
             backend.log()->appendComment("Script: handshake done");
             backend.log()->append(CommLog::Rx, 1, QByteArray::fromHex("0142FF00"), true);
+            // Regression guard: the view must actually show the rows. A
+            // broken delegate (e.g. required model properties on a nested
+            // item) renders an empty window while the model has data.
+            if (auto *view = window->findChild<QQuickItem *>("commView")) {
+                const int viewCount = view->property("count").toInt();
+                if (viewCount < backend.log()->count()) {
+                    fprintf(stderr, "GRAB GUARD: view shows %d of %d rows\n",
+                            viewCount, backend.log()->count());
+                    std::_Exit(3);
+                }
+            }
         }
         // LUCID_TAB=script shows the script workbench in the grab.
         if (qEnvironmentVariable("LUCID_TAB") == QLatin1String("script")) {

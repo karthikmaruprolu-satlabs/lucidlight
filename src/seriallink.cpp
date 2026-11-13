@@ -76,6 +76,10 @@ void SerialLink::close() {
         m_fd = -1;
         m_device.clear();
         m_savedValid = false;
+        if (!m_parityTail.isEmpty()) {
+            emit received(m_parityTail);   // deliver the held partial escape
+            m_parityTail.clear();
+        }
         emit stateChanged();
     }
 }
@@ -154,7 +158,8 @@ void SerialLink::fail(const QString &message) {
 // error and is replaced by the ParityErrorChar; "\377 \377" is a real 0x00
 // data byte's escape and becomes a single 0xFF... (per termios: a data byte
 // 0xFF is delivered as "\377 \377").
-QByteArray SerialLink::decodeParity(const QByteArray &raw, int parityErrorChar) {
+QByteArray SerialLink::decodeParity(const QByteArray &raw, int parityErrorChar,
+                                    QByteArray *tail) {
     QByteArray out;
     out.reserve(raw.size());
     const char esc = char(0xFF);
@@ -180,6 +185,29 @@ QByteArray SerialLink::decodeParity(const QByteArray &raw, int parityErrorChar) 
         out.append(raw.at(i));
         ++i;
     }
+    // An escape that continues into the next read: hold it back so it is
+    // decoded with its remaining bytes. The rules follow from the encoding:
+    //   - a trailing run of k 0xFF bytes with k odd holds the last one (it
+    //     is either the first half of a doubled data 0xFF or the start of
+    //     an error triplet),
+    //   - a trailing "\377 \0" holds both (an error triplet missing its
+    //     byte), unless the \377 was already consumed as the second half of
+    //     a doubled pair (the byte before it is another \377).
+    if (tail) {
+        tail->clear();   // the caller treats the tail as "state after this call"
+        int run = 0;
+        while (run < raw.size() && raw.at(raw.size() - 1 - run) == esc)
+            ++run;
+        if (run % 2 == 1) {
+            *tail = raw.right(1);
+            out.chop(1);
+        } else if (run == 0 && raw.size() >= 2 && raw.at(raw.size() - 2) == esc
+                   && raw.at(raw.size() - 1) == mark
+                   && (raw.size() < 3 || raw.at(raw.size() - 3) != esc)) {
+            *tail = raw.right(2);
+            out.chop(2);
+        }
+    }
     return out;
 }
 
@@ -201,9 +229,14 @@ void SerialLink::readReady() {
     }
     if (total > 0) {
         chunk.resize(int(total));
-        if (m_decodeParity)
-            chunk = decodeParity(chunk, m_parityErrorChar);
-
+        if (m_decodeParity) {
+            // PARMRK escapes can split across read() calls; carry the
+            // incomplete tail (a lone \377 or \377 \0) into the next read
+            // so the decoder always sees whole escape sequences.
+            chunk = m_parityTail + chunk;
+            m_parityTail.clear();
+            chunk = decodeParity(chunk, m_parityErrorChar, &m_parityTail);
+        }
         emit received(chunk);
     }
     if (total == 0 && errno == EAGAIN)

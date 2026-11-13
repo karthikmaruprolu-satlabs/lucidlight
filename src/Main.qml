@@ -105,6 +105,7 @@ ApplicationWindow {
 
     function saveLog() {
         pickerFlows.openSave = false;
+        pickerFlows.kind = "log";
         picker.saveFile(qsTr("Save communication log"), qsTr("Log file"), "*.log", "lucidlight.log");
     }
 
@@ -487,6 +488,7 @@ ApplicationWindow {
 
                         ListView {
                             id: commView
+                            objectName: "commView"
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
@@ -500,16 +502,41 @@ ApplicationWindow {
                             onCountChanged: if (atEnd) positionViewAtEnd()
 
                             delegate: Item {
+                                id: logRowWrapper
+                                // Required properties must sit on the delegate
+                                // root: nested items cannot see model roles.
+                                required property int index
+                                required property int entryIndex
+                                required property string clock
+                                required property string delta
+                                required property int direction
+                                required property int channel
+                                required property string text
+                                required property string rawHex
+                                required property bool highlight
+                                required property bool comment
+                                required property bool searchHit
                                 width: commView.width
-                                height: rowDelegate.height
+                                implicitHeight: rowDelegate.implicitHeight
                                 Rectangle {
                                     anchors.fill: parent
                                     color: Qt.alpha(theme.accent, 0.22)
-                                    visible: index === backend.log.currentFindRow
+                                    visible: logRowWrapper.index === backend.log.currentFindRow
                                 }
                                 CommRow {
                                     id: rowDelegate
-                                    width: parent.width
+                                    anchors.fill: parent
+                                    entryIndex: logRowWrapper.entryIndex
+                                    index: logRowWrapper.index
+                                    clock: logRowWrapper.clock
+                                    delta: logRowWrapper.delta
+                                    direction: logRowWrapper.direction
+                                    channel: logRowWrapper.channel
+                                    text: logRowWrapper.text
+                                    rawHex: logRowWrapper.rawHex
+                                    highlight: logRowWrapper.highlight
+                                    comment: logRowWrapper.comment
+                                    searchHit: logRowWrapper.searchHit
                                     onContextMenuRequested: (row) => rowMenu.popupAt(row)
                                 }
                             }
