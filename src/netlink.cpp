@@ -2,7 +2,6 @@
 
 #include <QLocalServer>
 #include <QLocalSocket>
-#include <QTimer>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QUdpSocket>

@@ -185,7 +185,7 @@ into `~/.pi/agent/skills/lucidlight/`.
 
 ```sh
 ./build.sh          # qmake6 + make into build/lucidlight
-./test.sh           # 37 unit and end-to-end tests (offscreen)
+./test.sh           # 100 unit and end-to-end tests (offscreen)
 tests/grab_harness   # LUCID_SIM=1 LUCID_TAB=script ./grab_harness — screenshots offscreen
 ```
 

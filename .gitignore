@@ -1,5 +1,4 @@
 /build/
-/build-asan/
 /pkgbuild/pkg/
 /pkgbuild/src/
 *.pkg.tar.*
