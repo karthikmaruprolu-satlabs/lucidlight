@@ -7,7 +7,7 @@ Popup {
     id: root
 
     width: 560
-    height: 500
+    height: implicitContentHeight + 44
     anchors.centerIn: parent
     modal: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -39,9 +39,16 @@ Popup {
                 model: [
                     ["Space", qsTr("Start / stop communication")],
                     ["Enter", qsTr("Send the typed data")],
-                    ["F1 – F12", qsTr("Send the sequence bound to the key")],
+                    ["F5 / F6", qsTr("Start / stop communication")],
+                    ["F2 / F3", qsTr("Start / stop communication logging")],
+                    ["Ctrl+F5 / Ctrl+F6", qsTr("Keyboard console on / off")],
+                    ["F12", qsTr("Show / hide the script area")],
+                    ["Shift+F12", qsTr("Show / hide the sequence lists")],
+                    ["Ctrl+F1 – F12", qsTr("Send the sequence bound to the key")],
+                    ["Shift+F5", qsTr("Run the script")],
                     ["Ctrl+R", qsTr("Run the script")],
-                    ["Ctrl+K", qsTr("Clear the window")],
+                    ["Ctrl+T", qsTr("Save the script")],
+                    ["Ctrl+K / Ctrl+W", qsTr("Clear the window")],
                     ["Ctrl+F", qsTr("Search in the data")],
                     ["Ctrl+B", qsTr("Toggle the sequence panel")],
                     ["Ctrl+O / Ctrl+S", qsTr("Open / save the project")],
