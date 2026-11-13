@@ -1111,7 +1111,64 @@ QString toJs(const QString &source, QStringList *warnings)
 
     Translator translator;
     QString js = translator.run(rawLines, warnings);
-    return "/*vbs*/\n" + js + "\n";
+    // VBScript identifiers are case-insensitive; JS is not. Canonicalize
+    // every identifier to the casing of its first occurrence so "chkSumHex"
+    // and "chksumHex" refer to the same variable. Member properties after a
+    // dot and keywords are left untouched.
+    static const QSet<QString> keywords = {
+        "if", "then", "else", "elseif", "end", "sub", "function", "dim",
+        "const", "for", "to", "step", "next", "while", "wend", "do", "loop",
+        "until", "select", "case", "with", "exit", "not", "and", "or", "xor",
+        "mod", "true", "false", "nothing", "empty", "byval", "set", "redim",
+        "on", "error", "resume", "call", "class", "each", "in", "is", "new",
+        "rem", "me"
+    };
+    QHash<QString, QString> canonical;
+    QString out;
+    out.reserve(js.size());
+    int i = 0;
+    const int n = js.size();
+    while (i < n) {
+        const QChar c = js.at(i);
+        if (c == '"') {   // string literal
+            out += c;
+            ++i;
+            while (i < n) {
+                out += js.at(i);
+                if (js.at(i) == '"') {
+                    if (i + 1 < n && js.at(i + 1) == '"') { out += '"'; i += 2; continue; }
+                    ++i;
+                    break;
+                }
+                ++i;
+            }
+            continue;
+        }
+        if (c == '/' && i + 1 < n && js.at(i + 1) == '/') {   // line comment
+            while (i < n && js.at(i) != '\n')
+                out += js.at(i++);
+            continue;
+        }
+        const bool identStart = c.isLetter() || c == '_' || c == '$';
+        const bool afterDot = i > 0 && js.at(i - 1) == '.';
+        if (identStart && !afterDot) {
+            int j = i;
+            while (j < n && (js.at(j).isLetterOrNumber() || js.at(j) == '_' || js.at(j) == '$'))
+                ++j;
+            const QString word = js.mid(i, j - i);
+            const QString lower = word.toLower();
+            if (!keywords.contains(lower)) {
+                if (!canonical.contains(lower))
+                    canonical.insert(lower, word);
+                out += canonical.value(lower);
+                i = j;
+                continue;
+            }
+        }
+        out += c;
+        ++i;
+    }
+    return "/*vbs*/\n" + out + "\n";
 }
 
 }  // namespace VbsTrans

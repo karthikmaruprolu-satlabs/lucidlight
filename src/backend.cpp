@@ -78,8 +78,9 @@ Backend::Backend(QObject *parent)
     // can appear before quitting.
     wireDirtyTracking();
     connect(m_runner, &ScriptRunner::finished, this, &Backend::scriptFinished);
-    connect(m_runner, &ScriptRunner::commentRequested, m_log, [this](const QString &text) {
-        m_log->appendComment(text);
+    connect(m_runner, &ScriptRunner::commentRequested, m_log,
+            [this](const QString &text, bool pendingLine) {
+        m_log->appendComment(text, pendingLine);
     });
     connect(m_runner, &ScriptRunner::clearRequested, m_log, &CommLog::clear);
     connect(m_runner, &ScriptRunner::saveLogRequested, this, &Backend::saveLogTo);

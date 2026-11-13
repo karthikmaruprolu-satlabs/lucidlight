@@ -216,7 +216,26 @@ void CommLog::flushPending() {
     trimIfNeeded();
 }
 
-void CommLog::append(Direction direction, int channel, const QByteArray &data, bool highlighted) {
+void CommLog::append(Direction direction, int channel, const QByteArray &data,
+                     bool highlighted) {
+    append(direction, channel, data, highlighted, false);
+}
+
+void CommLog::append(Direction direction, int channel, const QByteArray &data,
+                     bool highlighted, bool pendingLine) {
+    // A new data/event row breaks an open AddComment line.
+    Row *last = m_frozen ? (m_pending.isEmpty() ? nullptr : &m_pending.last())
+                         : (m_rows.isEmpty() ? nullptr : &m_rows.last());
+    if (last && last->direction == Comment && last->pending
+        && direction != Comment) {
+        if (m_frozen)
+            last->pending = false;
+        else {
+            const int at = m_rows.size() - 1;
+            m_rows[at].pending = false;
+            emit dataChanged(index(at), index(at));
+        }
+    }
     Row row;
     row.direction = direction;
     row.channel = channel;
@@ -243,6 +262,7 @@ void CommLog::append(Direction direction, int channel, const QByteArray &data, b
         row.text = DataFormat::display(data, m_format);
     row.hex = DataFormat::toHex(data);
     row.highlighted = highlighted;
+    row.pending = pendingLine && direction == Comment;
     if (m_frozen) {
         // Keep the view stable while frozen; buffered arrivals repaint at once
         // when the view is released again.
@@ -259,7 +279,33 @@ void CommLog::append(Direction direction, int channel, const QByteArray &data, b
     trimIfNeeded();
 }
 
-void CommLog::appendComment(const QString &text) {
+// Docklight AddComment model: text flows into the output stream. A comment
+// added with lineBreakAndPadding=false continues the current line; a padded
+// comment closes the line after printing.
+void CommLog::appendComment(const QString &text, bool pending) {
+    Row *last = m_frozen ? (m_pending.isEmpty() ? nullptr : &m_pending.last())
+                         : (m_rows.isEmpty() ? nullptr : &m_rows.last());
+    const bool openLine = last && last->direction == Comment && last->pending;
+    if (pending) {
+        if (openLine) {
+            last->text += text;
+            if (!m_frozen)
+                emit dataChanged(index(m_rows.size() - 1),
+                                 index(m_rows.size() - 1));
+            return;
+        }
+        append(Comment, -1, text.toUtf8(), false, true);
+        return;
+    }
+    // Padded comment: completes the open line, then starts/ends its own.
+    if (openLine) {
+        last->pending = false;
+        last->text += text;
+        if (!m_frozen)
+            emit dataChanged(index(m_rows.size() - 1),
+                             index(m_rows.size() - 1));
+        return;
+    }
     append(Comment, -1, text.toUtf8());
 }
 

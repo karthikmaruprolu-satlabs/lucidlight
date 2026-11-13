@@ -81,7 +81,7 @@ signals:
     void incomingWakeup();
     void outputLine(const QString &line, bool error);
     void messageRequested(const QString &text);
-    void commentRequested(const QString &text);
+    void commentRequested(const QString &text, bool pendingLine = false);
     void clearRequested();
     void saveLogRequested(const QString &path);
     void finished(bool ok, const QString &error);
@@ -225,8 +225,8 @@ public:
     // Docklight: DL.AddComment [comment] [, timeStampAfterComment]
     // [, lineBreakAndPadding]
     Q_INVOKABLE void AddComment(const QString &comment = QString(),
-                                bool timeStampAfterComment = true,
-                                const QString &lineBreakAndPadding = QString());
+                                bool timeStampAfterComment = false,
+                                bool lineBreakAndPadding = true);
     Q_INVOKABLE void Comment(const QString &text) { AddComment(text); }
     Q_INVOKABLE QString GetCommWindowData(const QString &representation = QStringLiteral("A"));
     Q_INVOKABLE void SetContentsFilter(int filter);
@@ -297,14 +297,14 @@ public:
                                        int start = 1, int length = -1);
     Q_INVOKABLE void OnSend_SetData(const QString &newData,
                                     const QString &representation = QStringLiteral("A"));
-    Q_INVOKABLE int OnSend_Peek(int charNo, const QString &representation = QString());
+    Q_INVOKABLE QJSValue OnSend_Peek(int charNo, const QString &representation = QString());
     Q_INVOKABLE void OnSend_Poke(int charNo, int value);
     Q_INVOKABLE int OnReceive_GetSize() const;
     Q_INVOKABLE QString OnReceive_GetName() const;
     Q_INVOKABLE int OnReceive_GetIndex() const;
     Q_INVOKABLE QString OnReceive_GetData(const QString &representation = QStringLiteral("A"),
                                           int start = 1, int length = -1);
-    Q_INVOKABLE int OnReceive_Peek(int charNo, const QString &representation = QString());
+    Q_INVOKABLE QJSValue OnReceive_Peek(int charNo, const QString &representation = QString());
     Q_INVOKABLE int OnReceive_GetChannel() const;
     Q_INVOKABLE double OnReceive_GetDateTime() const;
     Q_INVOKABLE int OnReceive_GetMilliseconds() const;
@@ -352,7 +352,7 @@ signals:
     void runningChanged();
     void outputLine(const QString &line, bool error);
     void messageRequested(const QString &text);
-    void commentRequested(const QString &text);
+    void commentRequested(const QString &text, bool pendingLine = false);
     void clearRequested();
     void saveLogRequested(const QString &path);
     void finished(bool ok, const QString &error);

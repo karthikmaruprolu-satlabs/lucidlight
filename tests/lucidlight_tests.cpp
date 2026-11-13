@@ -2097,7 +2097,8 @@ private slots:
             if (!error)
                 notes.append(line);
         });
-        connect(&runner, &ScriptRunner::commentRequested, [&](const QString &line) {
+        connect(&runner, &ScriptRunner::commentRequested,
+                [&](const QString &line, bool) {
             notes.append(line);
         });
         connect(&runner, &ScriptRunner::finished, [&](bool ok, const QString &) {
@@ -2161,6 +2162,99 @@ private slots:
         QVERIFY(all.contains("neq"));
         QVERIFY(!all.contains("high"));
         QVERIFY(!all.contains("bad"));
+    }
+
+    void onSendChecksumExampleFromManual()
+    {
+        // Manual "Sub DL_OnSend() - Send Sequence Data Manipulation": a
+        // random character is poked into the sequence and a MOD256 checksum
+        // over the preceding bytes is written to the last byte. The manual's
+        // sample output is "Checksum on 54 65 73 74 53 0D is 00(Hex), ...".
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        // QString(const char*) truncates at embedded NULs — build the
+        // 7-byte "TestX<CR><NUL>" payload explicitly.
+        const QString testData =
+            QString::fromLatin1("TestX\r", 6) + QChar(0);
+        backend.sequences()->add(QVariantMap{
+            {"name", "Test"}, {"isSend", true}, {"format", 0},
+            {"data", testData}});
+        QStringList notes;
+        QEventLoop loop;
+        bool done = false;
+        connect(backend.scripts(), &ScriptRunner::commentRequested,
+                [&](const QString &line, bool) { notes.append(line); });
+        connect(backend.scripts(), &ScriptRunner::finished,
+                [&](bool, const QString &) { done = true; loop.quit(); });
+        const char *vbs =
+            "DL.SendSequence \"Test\"\n"
+            "DL.Pause 100\n"
+            "DL.Quit\n"
+            "Sub DL_OnSend()\n"
+            "  seqSize = DL.OnSend_GetSize()\n"
+            "  If seqSize > 2 Then\n"
+            "    DL.OnSend_Poke seqSize - 2, 65 + Rnd * 25\n"
+            "    chksumHex = DL.CalcChecksum(\"MOD256\", DL.OnSend_GetData(\"H\"), \"H\", 1, seqSize - 1)\n"
+            "    DL.OnSend_Poke seqSize, CInt (\"&h\" + chksumHex)\n"
+            "    DL.AddComment vbCrLf & vbCrLf\n"
+            "    DL.AddComment \"Checksum on\", False, False\n"
+            "    For i = 1 To seqSize - 1\n"
+            "      DL.AddComment \" \" & DL.OnSend_Peek(i, \"H\"), False, False\n"
+            "    Next\n"
+            "    DL.AddComment \" is \" & DL.OnSend_Peek(seqSize, \"H\") & \"(Hex), \" & DL.OnSend_Peek(seqSize, \"D\") & \"(Decimal)\"\n"
+            "  End If\n"
+            "End Sub\n";
+        backend.toggleComm();   // the manual example starts communication first
+        backend.runScript(vbs);
+        loop.exec();
+        QVERIFY(done);
+        backend.comm()->stop();
+
+        // One merged comment line per send, in the manual's format.
+        QString merged;
+        for (int i = 0; i < notes.size(); ++i)
+            if (notes.at(i).contains("Checksum on")) {
+                merged = notes.at(i);
+                for (int j = i + 1; j < notes.size()
+                     && !notes.at(j).contains("\r\n"); ++j)
+                    merged += notes.at(j);
+            }
+        QVERIFY(merged.contains("(Hex), "));
+        QRegularExpression re(
+            "Checksum on 54 65 73 74 [4-5][0-9A-F] 0D is [0-9A-F]{2}\\(Hex\\),"
+            " \\d+\\(Decimal\\)");
+        QVERIFY(re.match(merged).hasMatch());
+
+        // The transmitted bytes end with the checksum of the first six.
+        QByteArray got;
+        char buffer[64];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1500 && got.size() < 7) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 30);
+            const ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0)
+                got.append(buffer, int(n));
+        }
+        QVERIFY(got.size() >= 7);
+        const uchar *p = reinterpret_cast<const uchar *>(got.constData());
+        QCOMPARE(int(p[0]), 0x54);
+        QCOMPARE(int(p[1]), 0x65);
+        QCOMPARE(int(p[2]), 0x73);
+        QCOMPARE(int(p[3]), 0x74);
+        QVERIFY(p[4] >= 65 && p[4] <= 90);           // random letter
+        QCOMPARE(int(p[5]), 0x0D);
+        int sum = 0;
+        for (int i = 0; i < 6; ++i)
+            sum += int(p[i]);
+        QCOMPARE(int(p[6]), sum & 0xFF);             // MOD256 checksum byte
+
+        backend.comm()->stop();
+        ::close(master);
     }
 
     void scriptEchoesThroughRealPort()

@@ -285,9 +285,13 @@ void DLScriptEngine::run(QString code) {
         "function Oct(v) { return (Number(v) >>> 0).toString(8).toUpperCase(); }"
         "function CStr(v) { if (v === true) return 'True'; if (v === false) return 'False';"
         "  return v === null || v === undefined ? '' : String(v); }"
-        "function CInt(v) { return Math.round(Number(String(v).replace(',', '.'))); }"
+        "function VBNum(v) { v = String(v); var t = v.replace(/^\\s+/, '');"
+        "  if (/^&h/i.test(t)) return parseInt(t.slice(2), 16);"
+        "  if (/^&o/i.test(t)) return parseInt(t.slice(2), 8);"
+        "  var n = Number(t.replace(',', '.')); return isNaN(n) && t !== '' ? 0 : n; }"
+        "function CInt(v) { return Math.round(VBNum(v)); }"
         "function CLng(v) { return CInt(v); }"
-        "function CDbl(v) { return Number(String(v).replace(',', '.')); }"
+        "function CDbl(v) { return VBNum(v); }"
         "function CSng(v) { return CDbl(v); }"
         "function CBool(v) { return !!v; }"
         "function Round(v, digits) { var p = Math.pow(10, digits || 0);"
@@ -850,13 +854,13 @@ int DLObject::resolveSequenceId(const QJSValue &nameOrIndex, bool send) const {
 // Docklight: DL.AddComment [comment] [, timeStampAfterComment]
 // [, lineBreakAndPadding]
 void DLObject::AddComment(const QString &comment, bool timeStampAfterComment,
-                          const QString &lineBreakAndPadding) {
+                          bool lineBreakAndPadding) {
     QString text = comment;
     if (timeStampAfterComment)
         text += QStringLiteral(" ") + GetDocklightTimeStamp(QJSValue(), -1, true);
-    if (!lineBreakAndPadding.isEmpty())
-        text += lineBreakAndPadding;
-    emit m_host->commentRequested(text);
+    // lineBreakAndPadding=false lets the next AddComment call continue the
+    // same output line (CommLog keeps the row open until it is closed).
+    emit m_host->commentRequested(text, !lineBreakAndPadding);
 }
 
 QString DLObject::GetCommWindowData(const QString &representation) {
@@ -1465,18 +1469,26 @@ void DLObject::OnSend_SetData(const QString &newData, const QString &representat
     else
         m_host->m_onSendData = newData.toLatin1();
 }
-int DLObject::OnSend_Peek(int charNo, const QString &representation) {
+QJSValue DLObject::OnSend_Peek(int charNo, const QString &representation) {
     const int index = charNo > 0 ? charNo - 1 : m_host->m_onSendData.size() + charNo;
     if (index < 0 || index >= m_host->m_onSendData.size())
-        return 0;
+        return QJSValue(0);
     const uchar value = uchar(m_host->m_onSendData.at(index));
-    if (representation.compare(QLatin1String("H"), Qt::CaseInsensitive) == 0
-        || representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0) {
-        // Docklight returns a string in the requested representation.
-        m_host->m_lastError.clear();
-        return value;   // numeric form; string form via GetData
+    if (!representation.isEmpty()) {
+        // Docklight returns a STRING in the requested representation:
+        // "A" = ASCII, "H" = HEX, "D" = Decimal, "B" = Binary.
+        const QChar r = representation.at(0).toUpper();
+        if (r == 'H')
+            return QJSValue(QStringLiteral("%1").arg(value, 2, 16, QChar('0')).toUpper());
+        if (r == 'D')
+            return QJSValue(QString::number(value));
+        if (r == 'B')
+            return QJSValue(QStringLiteral("%1").arg(value, 8, 2, QChar('0')));
+        if (r == 'A')
+            return QJSValue(QString(QChar(value)));
+        return QJSValue(value);
     }
-    return value;
+    return QJSValue(value);
 }
 void DLObject::OnSend_Poke(int charNo, int value) {
     const int index = charNo > 0 ? charNo - 1 : m_host->m_onSendData.size() + charNo;
@@ -1495,12 +1507,24 @@ int DLObject::OnReceive_GetIndex() const {
 QString DLObject::OnReceive_GetData(const QString &representation, int start, int length) {
     return contextData(m_host->m_onReceive.bytes, representation, start, length);
 }
-int DLObject::OnReceive_Peek(int charNo, const QString &representation) {
-    Q_UNUSED(representation)
+QJSValue DLObject::OnReceive_Peek(int charNo, const QString &representation) {
     const int index = charNo > 0 ? charNo - 1 : m_host->m_onReceive.bytes.size() + charNo;
     if (index < 0 || index >= m_host->m_onReceive.bytes.size())
-        return 0;
-    return uchar(m_host->m_onReceive.bytes.at(index));
+        return QJSValue(0);
+    const uchar value = uchar(m_host->m_onReceive.bytes.at(index));
+    if (!representation.isEmpty()) {
+        const QChar r = representation.at(0).toUpper();
+        if (r == 'H')
+            return QJSValue(QStringLiteral("%1").arg(value, 2, 16, QChar('0')).toUpper());
+        if (r == 'D')
+            return QJSValue(QString::number(value));
+        if (r == 'B')
+            return QJSValue(QStringLiteral("%1").arg(value, 8, 2, QChar('0')));
+        if (r == 'A')
+            return QJSValue(QString(QChar(value)));
+        return QJSValue(value);
+    }
+    return QJSValue(value);
 }
 int DLObject::OnReceive_GetChannel() const {
     return m_host->m_onReceive.channel;

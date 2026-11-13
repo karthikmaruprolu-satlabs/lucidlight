@@ -83,8 +83,12 @@ public:
     }
 
     void startClock();
-    void append(Direction direction, int channel, const QByteArray &data, bool highlighted = false);
-    void appendComment(const QString &text);
+    void append(Direction direction, int channel, const QByteArray &data,
+                bool highlighted = false);
+    // append() with a pending-line flag for AddComment continuations.
+    void append(Direction direction, int channel, const QByteArray &data,
+                bool highlighted, bool pendingLine);
+    void appendComment(const QString &text, bool pending = false);
     void appendEvent(const QString &text);
     void clear();
 
@@ -114,6 +118,7 @@ public:
         QString text;
         QString hex;
         bool highlighted = false;
+        bool pending = false;   // comment line still receiving text
     };
     const QVector<Row> &rows() const { return m_rows; }
     bool filterAccepts(const Row &row) const;
