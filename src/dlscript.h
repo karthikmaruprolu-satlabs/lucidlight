@@ -98,7 +98,8 @@ private:
     // Parks in a local event loop until the predicate is true, the timeout
     // passes, or a stop is requested. Queued DL_OnReceive events are
     // processed between park slices, mirroring Docklight's event timing.
-    bool waitUntil(const std::function<bool()> &predicate, int timeoutMs);
+    bool waitUntil(const std::function<bool()> &predicate, int timeoutMs,
+                   bool drainDuring = true);
     void processReceiveEvents();
     // Blocking call into the bridge object living on the main thread.
     QVariant callBridge(const char *method, const QVariantList &args = {});

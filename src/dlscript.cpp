@@ -123,9 +123,17 @@ QVariant DLScriptEngine::callBridge(const char *method, const QVariantList &args
     return result;
 }
 
-bool DLScriptEngine::waitUntil(const std::function<bool()> &predicate, int timeoutMs) {
+bool DLScriptEngine::waitUntil(const std::function<bool()> &predicate,
+                               int timeoutMs, bool drainDuring) {
     QElapsedTimer timer;
     timer.start();
+    // Docklight: DL_OnReceive() calls detected while a blocking call runs are
+    // queued and executed after the call returns — so every exit path drains
+    // the queue once.
+    struct Drain {
+        DLScriptEngine *e;
+        ~Drain() { e->processReceiveEvents(); }
+    } drain{this};
     while (!predicate()) {
         if (m_stop)
             return false;
@@ -135,9 +143,9 @@ bool DLScriptEngine::waitUntil(const std::function<bool()> &predicate, int timeo
         QEventLoop loop;
         park(loop, this, timeoutMs < 0 ? -1 : timeoutMs - int(timer.elapsed()));
         m_parked = false;
-        processReceiveEvents();
+        if (drainDuring)
+            processReceiveEvents();
     }
-    processReceiveEvents();
     return true;
 }
 
@@ -898,9 +906,9 @@ void DLObject::Wait(int ms) {
 }
 
 void DLObject::Pause(int ms) {
-    QEventLoop loop;
-    QTimer::singleShot(qMax(0, ms), &loop, &QEventLoop::quit);
-    loop.exec();
+    // Like Docklight, DL_OnReceive() events detected during the pause are
+    // queued and executed after Pause returns (waitUntil drains them).
+    m_host->waitUntil([] { return false; }, qMax(0, ms), false);
 }
 
 void DLObject::Break() {
