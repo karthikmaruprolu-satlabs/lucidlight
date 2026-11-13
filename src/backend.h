@@ -1,5 +1,9 @@
 #pragma once
 
+// Single source of truth for the version, used by the About dialog,
+// --version and the PKGBUILD.
+inline const char *APP_VERSION = "0.3.3";
+
 #include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
@@ -33,6 +37,7 @@ class Backend : public QObject {
     // Docklight's recent-files list (File menu), persisted across sessions.
     Q_PROPERTY(QStringList recentFiles READ recentFiles NOTIFY recentFilesChanged)
     Q_PROPERTY(QString commStateText READ commStateText NOTIFY stateChanged)
+    Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
 
     Q_PROPERTY(CommManager *comm READ comm CONSTANT)
     Q_PROPERTY(ChannelSettings *channelA READ channelA CONSTANT)
@@ -80,6 +85,7 @@ public:
     QString projectPath() const { return m_projectPath; }
     void setProjectPath(const QString &path);
     QStringList recentFiles() const { return m_recentFiles; }
+    QString appVersion() const { return QString::fromLatin1(APP_VERSION); }
     Q_INVOKABLE void clearRecentFiles();
     // Sequence library: share sequences between projects (.llseq JSON).
     Q_INVOKABLE bool exportSequences(const QString &path);

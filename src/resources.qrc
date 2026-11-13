@@ -14,5 +14,6 @@
         <file alias="ScriptPanel.qml">qml/ScriptPanel.qml</file>
         <file alias="HelpOverlay.qml">qml/HelpOverlay.qml</file>
         <file alias="i18n/en.json">i18n/en.json</file>
+        <file alias="lucidlight.svg">../pkgbuild/lucidlight.svg</file>
     </qresource>
 </RCC>

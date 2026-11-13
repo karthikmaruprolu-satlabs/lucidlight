@@ -3,7 +3,6 @@
 
 #include <QCommandLineParser>
 
-constexpr const char *LUCIDLIGHT_VERSION = "0.3.3";
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -217,7 +216,7 @@ int main(int argc, char *argv[]) {
         const QString arg = QString::fromLocal8Bit(argv[i]);
         if (arg == QLatin1String("run")) {
             QCoreApplication app(argc, argv);
-            app.setApplicationVersion(LUCIDLIGHT_VERSION);
+            app.setApplicationVersion(APP_VERSION);
             QCommandLineParser parser;
             parser.addHelpOption();
             parser.addVersionOption();
@@ -251,7 +250,7 @@ int main(int argc, char *argv[]) {
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("lucidlight");
-    app.setApplicationVersion(LUCIDLIGHT_VERSION);
+    app.setApplicationVersion(APP_VERSION);
     app.setOrganizationName("lucidlight");
     app.setDesktopFileName("lucidlight");
     app.setWindowIcon(QIcon::fromTheme("lucidlight"));

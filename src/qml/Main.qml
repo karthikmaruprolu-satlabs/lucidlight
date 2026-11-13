@@ -19,6 +19,12 @@ ApplicationWindow {
                 win.x = x; win.y = y; win.width = w; win.height = h;
             }
         }
+        // A first-run hint sequence so the list is not empty.
+        if (backend.sequences.count === 0) {
+            backend.sequences.add({ name: "Greet", isSend: true, format: 0, data: "Hello [0D][0A]", hotkey: 1 });
+            backend.sequences.add({ name: "CR", isSend: true, format: 0, data: "[0D]", hotkey: 2 });
+            backend.sequences.add({ name: "Ack ping", isSend: false, format: 0, data: "PING", hotkey: 0, replyToId: -1 });
+        }
     }
     onXChanged: storeGeometry.restart()
     onYChanged: storeGeometry.restart()
@@ -174,6 +180,8 @@ ApplicationWindow {
             sequenceDialog.openEdit(0);
         else if (name === "help")
             win.helpVisible = true;
+        else if (name === "about")
+            aboutDialog.open();
         else if (name === "params") {
             // Open the Send Sequence Parameter dialog for the first send
             // sequence that has wildcards.
@@ -921,6 +929,10 @@ ApplicationWindow {
             onTriggered: win.helpVisible = true
         }
         MenuItem {
+            text: qsTr("About Lucidlight")
+            onTriggered: aboutDialog.open()
+        }
+        MenuItem {
             text: qsTr("Quit") + "  (Ctrl+Q)"
             onTriggered: win.close()
         }
@@ -940,6 +952,74 @@ ApplicationWindow {
         MenuItem {
             text: qsTr("Copy data as hex")
             onTriggered: backend.copyToClipboard(backend.log.hexAt(rowMenu.row))
+        }
+    }
+
+
+    // About dialog: identity, version, license, project link.
+    Popup {
+        id: aboutDialog
+        anchors.centerIn: parent
+        width: 430
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        background: Rectangle {
+            color: theme.surface
+            radius: Math.min(10, theme.radius + 4)
+            border.color: Qt.alpha(theme.muted, 0.3)
+        }
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 10
+            RowLayout {
+                spacing: 10
+                Image {
+                    source: "qrc:/lucidlight.svg"
+                    sourceSize: Qt.size(40, 40)
+                    visible: status === Image.Ready
+                }
+                Label {
+                    text: qsTr("Lucidlight")
+                    font.pixelSize: 20
+                    font.weight: Font.DemiBold
+                    color: theme.bright
+                }
+                Label {
+                    text: backend.appVersion
+                    font.pixelSize: 12
+                    color: theme.yellow
+                    Layout.alignment: Qt.AlignBottom
+                }
+            }
+            Label {
+                text: qsTr("Serial monitor, terminal, and test scripting for the desktop — watch the bytes flow, poke the device, automate the whole conversation.")
+                wrapMode: Text.Wrap
+                font.pixelSize: 12
+                color: theme.fg
+                Layout.fillWidth: true
+            }
+            Label {
+                text: qsTr("Inspired by Docklight Scripting. Serial via POSIX termios; TCP, UDP and UNIX socket channels; JavaScript scripting with Docklight VBScript compatibility; Modbus RTU decoding; headless test runs.")
+                wrapMode: Text.Wrap
+                font.pixelSize: 11
+                color: theme.muted
+                Layout.fillWidth: true
+            }
+            Label {
+                text: qsTr("License: MIT — github.com/karthikreddy-satlabs/lucidlight")
+                font.pixelSize: 11
+                color: theme.muted
+                Layout.fillWidth: true
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                Button {
+                    text: qsTr("Close")
+                    highlighted: true
+                    onClicked: aboutDialog.close()
+                }
+            }
         }
     }
 
@@ -1172,12 +1252,4 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: {
-        // A first-run hint sequence so the list is not empty.
-        if (backend.sequences.count === 0) {
-            backend.sequences.add({ name: "Greet", isSend: true, format: 0, data: "Hello [0D][0A]", hotkey: 1 });
-            backend.sequences.add({ name: "CR", isSend: true, format: 0, data: "[0D]", hotkey: 2 });
-            backend.sequences.add({ name: "Ack ping", isSend: false, format: 0, data: "PING", hotkey: 0, replyToId: -1 });
-        }
-    }
 }
