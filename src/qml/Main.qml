@@ -8,6 +8,35 @@ ApplicationWindow {
 
     width: 1120
     height: 720
+    Component.onCompleted: {
+        // Restore the last window geometry (Docklight remembers it too).
+        if (backend.windowGeometry.length >= 16) {
+            const g = backend.windowGeometry;
+            const dv = new DataView(g.buffer, g.byteOffset, g.length);
+            const x = dv.getInt32(0, true), y = dv.getInt32(4, true);
+            const w = dv.getInt32(8, true), h = dv.getInt32(12, true);
+            if (w > 0 && h > 0) {
+                win.x = x; win.y = y; win.width = w; win.height = h;
+            }
+        }
+    }
+    onXChanged: storeGeometry.restart()
+    onYChanged: storeGeometry.restart()
+    onWidthChanged: storeGeometry.restart()
+    onHeightChanged: storeGeometry.restart()
+    Timer {
+        id: storeGeometry
+        interval: 400
+        onTriggered: {
+            const buf = new ArrayBuffer(16);
+            const dv = new DataView(buf);
+            dv.setInt32(0, win.x, true);
+            dv.setInt32(4, win.y, true);
+            dv.setInt32(8, win.width, true);
+            dv.setInt32(12, win.height, true);
+            backend.windowGeometry = new Uint8Array(buf);
+        }
+    }
     minimumWidth: 760
     minimumHeight: 500
     visible: true

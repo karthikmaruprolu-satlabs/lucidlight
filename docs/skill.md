@@ -129,7 +129,7 @@ open/save through the portal file dialogs. The session autosaves to
 
 Save communication log (Ctrl+Shift+S) accepts `.log/.txt`, `.htm` (full HTML
 with customizable CSS via `DL.SetHtmlStyle(css)`), `.rtf`, and `.md`
-(Markdown table: Stamp | Direction | Data). File > Export/Import sequence
+(Markdown table: Stamp | Direction | Data) and .csv (strict RFC 4180: time, direction, channel, data_hex, data_ascii — spreadsheet/pandas friendly). File > Export/Import sequence
 library (`.llseq`) shares all sequences between projects — ids are remapped
 and colliding names get " (2)" suffixes on import. File > Expert Options:
 high priority timing raises scheduler priority best-effort

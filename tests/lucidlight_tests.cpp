@@ -2014,6 +2014,45 @@ private slots:
 
 
 
+
+
+    void windowGeometryPersists()
+    {
+        Backend backend;
+        QByteArray g(16, 0);
+        g[0] = 100; g[4] = 50;           // x=100, y=50 (int32 LE)
+        g[8] = 0x40; g[9] = 0x06;        // w = 1600
+        g[12] = 0xd0; g[13] = 0x02;      // h = 720
+        backend.setWindowGeometry(g);
+        QCOMPARE(backend.windowGeometry(), g);
+        // A geometry change must not mark the project dirty.
+        QVERIFY(!backend.dirty());
+    }
+
+    void csvLogExport()
+    {
+        Backend backend;
+        backend.log()->append(CommLog::Tx, 0, QByteArray("a,\"b\""), false);
+        backend.log()->append(CommLog::Rx, 1, QByteArray("\x07"), false);
+        backend.log()->appendComment("note, too");
+        QTemporaryDir dir;
+        const QString path = dir.path() + "/log.csv";
+        backend.saveLogTo(path);
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString csv = QString::fromUtf8(f.readAll());
+        f.close();
+        QVERIFY(csv.startsWith("time,direction,channel,data_hex,data_ascii\n"));
+        // RFC 4180: quotes doubled, fields quoted. ASCII data is the last
+        // column, hex the one before it.
+        QVERIFY(csv.contains("\"61 2C 22 62 22\",\"a,\"\"b\"\"\""));
+        QVERIFY(csv.contains("\"07\",\"<BEL>\""));
+        QVERIFY(csv.contains("\"RX2\""));
+        QVERIFY(csv.contains("\"note, too\""));
+        // Strictly tabular: no prose lines anywhere in the file.
+        QVERIFY(!csv.contains("Docklight Log File"));
+    }
+
     void sequenceLibraryRoundTrip()
     {
         Backend backend;

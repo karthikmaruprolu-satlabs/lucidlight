@@ -52,6 +52,9 @@ class Backend : public QObject {
     // to Linux (rtkit -> sched_setscheduler -> nice, best effort).
     Q_PROPERTY(bool highPriorityTiming READ highPriorityTiming
                WRITE setHighPriorityTiming NOTIFY highPriorityTimingChanged)
+    // Window geometry (x, y, w, h) persisted with the session.
+    Q_PROPERTY(QByteArray windowGeometry READ windowGeometry
+               WRITE setWindowGeometry NOTIFY stateChanged)
     // Docklight's project option: run the script when the project opens.
     Q_PROPERTY(bool runOnOpen READ runOnOpen WRITE setRunOnOpen NOTIFY stateChanged)
     // Docklight's "additional date/time stamp": period in seconds for the
@@ -90,6 +93,8 @@ public:
     bool highPriorityTiming() const { return m_highPriorityTiming; }
     void setHighPriorityTiming(bool on);
     bool applyHighPriority();
+    QByteArray windowGeometry() const { return m_windowGeometry; }
+    void setWindowGeometry(const QByteArray &geometry);
     void setExternalEditor(const QString &cmd);
     Q_INVOKABLE bool editScriptExternally();
     void setScriptSource(const QString &source);
@@ -254,6 +259,7 @@ private:
     QString m_scriptSource;
     QString m_externalEditor;
     bool m_highPriorityTiming = false;
+    QByteArray m_windowGeometry;
     QFileSystemWatcher *m_scriptWatcher = nullptr;
     QString m_scriptTempFile;
     bool m_runOnOpen = false;

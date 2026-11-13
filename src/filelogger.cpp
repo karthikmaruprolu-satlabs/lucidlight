@@ -34,7 +34,7 @@ bool FileLogger::start(const QString &baseFilePath, bool appendData,
             m_representations.append(c);
     if (m_representations.isEmpty())
         m_representations.append("H");
-    m_format = qBound(0, format, 3);
+    m_format = qBound(0, format, 4);
 
     static const char *suffixes[] = {"_asc", "_hex", "_dec", "_bin"};
     static const char *reps[] = {"A", "H", "D", "B"};
@@ -45,6 +45,7 @@ bool FileLogger::start(const QString &baseFilePath, bool appendData,
         const QString suffix = m_format == 1 ? ".htm"
                                : m_format == 2 ? ".rtf"
                                : m_format == 3 ? ".md"
+                               : m_format == 4 ? ".csv"
                                : ".txt";
         File f;
         f.file = new QFile(base + suffixes[r] + suffix, this);
@@ -200,15 +201,22 @@ void FileLogger::writeHeader(File &f, const QString &representation) {
     }
     if (m_format == 3)
         *f.stream << "# Lucidlight communication log\n\n";
-    *f.stream << "Docklight Log File started... (" << stampText(QDateTime::currentMSecsSinceEpoch())
-              << ", " << representation << ")\n";
-    if (m_format == 3)
-        *f.stream << "\n";
+    else if (m_format == 4)
+        *f.stream << "time,direction,channel,data_hex,data_ascii\n";
+    if (m_format != 4) {
+        // CSV keeps the file strictly tabular — no prose lines.
+        *f.stream << "Docklight Log File started... ("
+                  << stampText(QDateTime::currentMSecsSinceEpoch())
+                  << ", " << representation << ")\n";
+        if (m_format == 3)
+            *f.stream << "\n";
+    }
 }
 
 void FileLogger::writeFooter(File &f) {
-    *f.stream << "Docklight Log File stopped (" << stampText(QDateTime::currentMSecsSinceEpoch())
-              << ")\n";
+    if (m_format != 4)
+        *f.stream << "Docklight Log File stopped ("
+                  << stampText(QDateTime::currentMSecsSinceEpoch()) << ")\n";
     if (m_format == 1)
         *f.stream << "</pre>\n</body>\n</html>\n";
     else if (m_format == 2)
@@ -237,6 +245,33 @@ void FileLogger::writeRow(File &f, const QString &representation, int direction,
         tag = direction == CommLog::Tx ? QStringLiteral("TX") : QStringLiteral("RX");
         if (channel >= 0)
             tag += QString::number(channel + 1);
+    }
+    if (m_format == 4) {
+        // CSV row: RFC 4180 quoting, hex and ASCII data side by side so
+        // spreadsheets and analysis tools can consume a session directly.
+        const QString stamp = m_microStamps
+            ? stampTextUs(f.stampUs >= 0 ? f.stampUs : nowUs() - m_startUs)
+            : stampText(stampMs);
+        const QString dirCell = tag == "NOTE" ? "NOTE"
+                                : tag.isEmpty() ? "Comment" : tag;
+        const QString chanCell = (direction == CommLog::Tx || direction == CommLog::Rx)
+                                     ? QString::number(channel + 1)
+                                     : QString();
+        auto quote = [](QString s) {
+            s.replace('"', "\"\"");
+            return "\"" + s + "\"";
+        };
+        const QString hexCell = (direction == CommLog::Tx || direction == CommLog::Rx)
+                                    ? DataFormat::toHex(data)
+                                    : QString();
+        const QString asciiCell = (direction == CommLog::Tx || direction == CommLog::Rx)
+                                      ? asciiWithControlNames(data)
+                                      : comment;
+        *f.stream << quote(stamp) << ',' << quote(dirCell) << ','
+                  << quote(chanCell) << ',' << quote(hexCell) << ','
+                  << quote(asciiCell) << "\n";
+        f.stream->flush();
+        return;
     }
     if (m_format == 3) {
         // Markdown table row. The first data row also emits the table head.

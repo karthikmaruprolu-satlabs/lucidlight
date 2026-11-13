@@ -180,6 +180,11 @@ not source-compatible, but the DL API names and semantics are replicated.
       Window layout themes: covered by the Omarchy theme engine instead.
 
 ## Recently closed (0.2.x)
+- [x] CSV log export (.csv) — strict RFC 4180 table (time, direction,
+      channel, data_hex, data_ascii), quoted/escaped; works for snapshots
+      and live logging (format 4)
+- [x] Window geometry persistence — size/position saved with the session,
+      restored on launch (400 ms debounce), does not dirty the project
 - [x] Markdown log export (.md) — table output with Stamp/Direction/Data
       columns, pipe/backtick escaping, highlighted rows bold; Save dialog
       and snapshot writer accept the new format

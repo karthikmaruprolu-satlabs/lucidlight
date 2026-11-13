@@ -1440,14 +1440,16 @@ void Backend::saveLogTo(const QString &path) {
     const QString suffix = QFileInfo(path).suffix().toLower();
     // Docklight's Save Log also accepts HTML and RTF; replay the buffered
     // window rows through the FileLogger machinery for those formats.
-    if (suffix == "htm" || suffix == "html" || suffix == "rtf" || suffix == "md") {
+    if (suffix == "htm" || suffix == "html" || suffix == "rtf" || suffix == "md"
+        || suffix == "csv") {
         static const char reps[] = "AHDB";
         FileLogger logger;
-        if (suffix != "md")
+        if (suffix != "md" && suffix != "csv")
             logger.setHtmlStyle(m_logger.htmlStyle());
         if (!logger.writeSnapshot(
                 m_log->rows(), path,
-                suffix == "rtf" ? 2 : suffix == "md" ? 3 : 1,
+                suffix == "rtf" ? 2 : suffix == "md" ? 3
+                                                    : suffix == "csv" ? 4 : 1,
                 QLatin1Char(reps[int(m_log->displayFormat())]))) {
             emit toast(tr("Cannot write %1").arg(path));
             return;
@@ -1618,6 +1620,13 @@ int Backend::importSequences(const QString &path) {
     return added.size();
 }
 
+void Backend::setWindowGeometry(const QByteArray &geometry) {
+    if (geometry == m_windowGeometry || geometry.isEmpty())
+        return;
+    m_windowGeometry = geometry;
+    setDirty(false);  // geometry is not a project edit
+}
+
 void Backend::pushRecentFile(const QString &path) {
     m_recentFiles.removeAll(path);
     m_recentFiles.prepend(path);
@@ -1712,6 +1721,7 @@ void Backend::saveSession() {
     // Program options (not part of the project file).
     state["externalEditor"] = m_externalEditor;
     state["highPriorityTiming"] = m_highPriorityTiming;
+    state["windowGeometry"] = QString::fromLatin1(m_windowGeometry.toBase64());
     QJsonArray recent;
     for (const QString &f : m_recentFiles)
         recent.append(f);
@@ -1741,6 +1751,9 @@ bool Backend::loadSession() {
         return false;
     setScriptSource(script);
     m_externalEditor = state.value("externalEditor").toString();
+    if (state.contains("windowGeometry"))
+        setWindowGeometry(QByteArray::fromBase64(
+            state.value("windowGeometry").toString().toLatin1()));
     const bool hp = state.value("highPriorityTiming").toBool();
     if (hp != m_highPriorityTiming)
         setHighPriorityTiming(hp);

@@ -64,7 +64,7 @@ private:
 
     QVector<File> m_files;
     QStringList m_representations;
-    int m_format = 0;   // 0 txt, 1 htm, 2 rtf, 3 markdown
+    int m_format = 0;   // 0 txt, 1 htm, 2 rtf, 3 markdown, 4 csv
     bool m_active = false;
     QString m_htmlStyle;
     bool m_microStamps = false;
