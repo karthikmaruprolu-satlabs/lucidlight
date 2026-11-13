@@ -25,6 +25,7 @@ Popup {
     function openFor(row, minLens) {
         sendRow = row;
         minLengths = minLens;
+        backend.dialogPause = true;   // Docklight pauses communication here
         paramsModel.clear();
         for (let i = 0; i < minLens.length; ++i)
             paramsModel.append({ "label": qsTr("Parameter %1").arg(i + 1) });
@@ -33,6 +34,8 @@ Popup {
         if (rep.count > 0 && rep.itemAt(0))
             rep.itemAt(0).field.forceActiveFocus();
     }
+
+    onClosed: backend.dialogPause = false
 
     function accept() {
         const values = [];

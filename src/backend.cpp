@@ -162,7 +162,25 @@ void Backend::setScriptSource(const QString &source) {
 // Traffic
 // ---------------------------------------------------------------------------
 
+void Backend::setDialogPause(bool paused) {
+    if (m_dialogPause == paused)
+        return;
+    m_dialogPause = paused;
+    if (!paused) {
+        // Process everything that arrived while the dialog was open.
+        const auto held = m_heldIncoming;
+        m_heldIncoming.clear();
+        for (const auto &chunk : held)
+            handleIncoming(chunk.first, chunk.second);
+    }
+    emit stateChanged();
+}
+
 void Backend::handleIncoming(int channel, const QByteArray &data) {
+    if (m_dialogPause && QThread::currentThread() == thread()) {
+        m_heldIncoming.append({channel, data});
+        return;
+    }
     // The matcher may fire a trigger for this very burst; remember that so
     // the log row gets the highlight mark.
     // Only the two main ports feed the receive matcher; side channels are
@@ -549,6 +567,8 @@ void Backend::sendByHotkey(int keyNumber) {
 }
 
 void Backend::checkRepeats() {
+    if (m_dialogPause)
+        return;
     if (!m_comm->running()) {
         if (!m_nextRepeatAt.isEmpty())
             m_nextRepeatAt.clear();

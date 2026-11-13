@@ -21,6 +21,9 @@
 class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool running READ running NOTIFY stateChanged)
+    // While the Send Sequence Parameter dialog is open, Docklight pauses
+    // communication: no receive processing and no periodical sends.
+    Q_PROPERTY(bool dialogPause WRITE setDialogPause NOTIFY stateChanged)
     Q_PROPERTY(bool dirty READ dirty WRITE setDirty NOTIFY stateChanged)
     Q_PROPERTY(QString projectPath READ projectPath WRITE setProjectPath NOTIFY stateChanged)
     Q_PROPERTY(QString commStateText READ commStateText NOTIFY stateChanged)
@@ -163,6 +166,7 @@ signals:
 
 private slots:
     void handleIncoming(int channel, const QByteArray &data);
+    void setDialogPause(bool paused);
     void handleTransmitted(int channel, const QByteArray &data);
     void handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens, int channel);
     void checkRepeats();
@@ -211,7 +215,9 @@ private:
 
     QTimer m_repeatTimer;
     QTimer m_clockTimer;
-    int m_clockStampInterval = 0;   // seconds, 0 = off
+    int m_clockStampInterval = 0;
+    bool m_dialogPause = false;
+    QVector<QPair<int, QByteArray>> m_heldIncoming;   // seconds, 0 = off
     bool m_keyboardConsole = false;
     QHash<int, qint64> m_nextRepeatAt;
     QHash<int, QStringList> m_repeatParameters;   // parameters captured at arm time
