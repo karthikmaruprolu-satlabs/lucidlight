@@ -157,6 +157,200 @@ QString convertRadixLiterals(const QString &expr, const QChar kind)
     return result;
 }
 
+
+namespace {
+// VBScript operator precedence: "+" is tighter than "&". Translating & to +
+// naively breaks expressions like i & " " & i+1 ("1 11" instead of "1 2").
+// This pass wraps the true operands of every & in parentheses, so
+// i & " " & i+1  becomes  (i) + (" ") + (i + 1).
+bool isIdentChar(QChar c) { return c.isLetterOrNumber() || c == '_' || c == '$' || c == '.'; }
+
+// Walk left over one operand starting at pos (inclusive), returns the start
+// index of the operand. Handles atoms, calls, indexing and the tighter
+// arithmetic operators (* / \\ % + - and Mod).
+// VBScript keywords that bind looser than "&" — they end an operand.
+bool isLowKeyword(const QString &word)
+{
+    static const QStringList low = { "and", "or", "not", "xor", "eqv", "imp" };
+    return low.contains(word.toLower());
+}
+
+bool isModKeyword(const QString &word)
+{
+    return word.compare("mod", Qt::CaseInsensitive) == 0;
+}
+
+// Walk left over one operand ending at pos (inclusive of the char at pos,
+// which is the last operand character). Returns the start index.
+int operandStart(const QString &e, int pos)
+{
+    const auto identChar = [](QChar c) {
+        return c.isLetterOrNumber() || c == '_' || c == '$' || c == '.';
+    };
+    while (pos >= 0 && e.at(pos) == ' ')
+        --pos;
+    int depth = 0;
+    int i = pos;
+    while (i >= 0) {
+        const QChar c = e.at(i);
+        if (c == ')') { ++depth; --i; continue; }
+        if (c == ']') { ++depth; --i; continue; }
+        if (c == '(') {
+            if (depth == 0) break;
+            --depth; --i; continue;
+        }
+        if (c == '[') {
+            if (depth == 0) break;
+            --depth; --i; continue;
+        }
+        if (depth > 0) { --i; continue; }
+        if (c == '"') {
+            // Walk back over the string literal (doubled quotes escape).
+            --i;
+            while (i >= 0) {
+                if (e.at(i) == '"' && (i == 0 || e.at(i - 1) != '"'))
+                    break;
+                --i;
+            }
+            --i;
+            continue;
+        }
+        if (identChar(c)) {
+            int j = i;
+            while (j >= 0 && identChar(e.at(j)))
+                --j;
+            const QString word = e.mid(j + 1, i - j);
+            if (isLowKeyword(word))
+                break;              // operator: the operand ends here
+            if (isModKeyword(word)) {
+                i = j - 1;          // Mod is tighter: consume and go on
+                continue;
+            }
+            i = j;                  // identifier belongs to the operand
+            continue;
+        }
+        if (c == '*' || c == '/' || c == '\\' || c == '%'
+            || c == '+' || c == '-') {
+            --i;
+            continue;
+        }
+        break;   // & = < > , : and anything else ends the operand
+    }
+    return i + 1;
+}
+
+// Walk right over one operand starting after pos; returns the end index
+// (exclusive).
+int operandEnd(const QString &e, int pos)
+{
+    const auto identChar = [](QChar c) {
+        return c.isLetterOrNumber() || c == '_' || c == '$' || c == '.';
+    };
+    const int n = e.size();
+    while (pos < n && e.at(pos) == ' ')
+        ++pos;
+    int depth = 0;
+    int i = pos;
+    while (i < n) {
+        const QChar c = e.at(i);
+        if (c == '(') { ++depth; ++i; continue; }
+        if (c == '[') { ++depth; ++i; continue; }
+        if (c == ')') {
+            if (depth == 0) break;
+            --depth; ++i; continue;
+        }
+        if (c == ']') {
+            if (depth == 0) break;
+            --depth; ++i; continue;
+        }
+        if (depth > 0) { ++i; continue; }
+        if (c == '"') {
+            ++i;
+            while (i < n) {
+                if (e.at(i) == '"') {
+                    if (i + 1 < n && e.at(i + 1) == '"') { i += 2; continue; }
+                    ++i;
+                    break;
+                }
+                ++i;
+            }
+            continue;
+        }
+        if (identChar(c)) {
+            int j = i;
+            while (j < n && identChar(e.at(j)))
+                ++j;
+            const QString word = e.mid(i, j - i);
+            if (isLowKeyword(word))
+                break;
+            i = j;   // Mod or an identifier: both belong to the operand
+            if (isModKeyword(word))
+                continue;   // Mod plus its operand follow
+            if (depth > 0)
+                continue;   // inside a group, the group's end decides
+            // An identifier directly followed by an identifier is not VB;
+            // stop if the next char is not an operator continuation.
+            int p = i;
+            while (p < n && e.at(p) == ' ')
+                ++p;
+            if (p < n && (e.at(p) == '*' || e.at(p) == '/' || e.at(p) == '\\'
+                          || e.at(p) == '%' || e.at(p) == '+' || e.at(p) == '-'
+                          || e.at(p) == '(' || e.at(p) == '['))
+                continue;
+            break;
+        }
+        if (c == '*' || c == '/' || c == '\\' || c == '%'
+            || c == '+' || c == '-') {
+            ++i;
+            // Skip chained unary signs.
+            while (i < n && (e.at(i) == '+' || e.at(i) == '-'))
+                ++i;
+            continue;
+        }
+        break;
+    }
+    return i;
+}
+
+QString translateAmp(const QString &expr)
+{
+    QString out = expr;
+    bool inString = false;
+    int i = 0;
+    while (i < out.size()) {
+        const QChar c = out.at(i);
+        if (c == '"') {
+            if (inString && i + 1 < out.size() && out.at(i + 1) == '"') {
+                i += 2;
+                continue;
+            }
+            inString = !inString;
+            ++i;
+            continue;
+        }
+        if (inString || c != '&') {
+            ++i;
+            continue;
+        }
+        // Not the &H/&O radix prefix.
+        if (i + 1 < out.size() && (out.at(i + 1) == 'H' || out.at(i + 1) == 'h'
+                                   || out.at(i + 1) == 'O' || out.at(i + 1) == 'o')) {
+            ++i;
+            continue;
+        }
+        const int left = operandStart(out, i - 1);
+        const int right = operandEnd(out, i + 1);
+        const QString lhs = out.mid(left, i - left).trimmed();
+        const QString rhs = out.mid(i + 1, right - i - 1).trimmed();
+        const QString merged = "(" + lhs + ") + (" + rhs + ")";
+        out.remove(left, right - left);
+        out.insert(left, merged);
+        i = left + merged.size();
+    }
+    return out;
+}
+}  // namespace
+
 // Convert one VB expression to a JS expression.
 QString convertExpression(QString expr)
 {
@@ -164,6 +358,7 @@ QString convertExpression(QString expr)
     if (expr.isEmpty())
         return expr;
     bool changed = false;
+    expr = translateAmp(expr);
     expr = convertStringLiterals(expr, &changed);
     expr = convertRadixLiterals(expr, 'h');
     expr = convertRadixLiterals(expr, 'o');
@@ -306,10 +501,41 @@ QString convertExpression(QString expr)
     return eq.trimmed();
 }
 
-// Split an argument list on top-level commas.
+// Split an argument list on top-level commas: respects string literals AND
+// bracket/paren nesting, so "Left(s, 5) & x" stays one argument.
 QStringList splitArgs(const QString &args)
 {
-    return splitOutside(args, ',');
+    QStringList parts;
+    QString current;
+    bool inString = false;
+    int depth = 0;
+    for (int i = 0; i < args.size(); ++i) {
+        const QChar c = args.at(i);
+        if (c == '"') {
+            if (inString && i + 1 < args.size() && args.at(i + 1) == '"') {
+                current += "\"\"";
+                ++i;
+                continue;
+            }
+            inString = !inString;
+            current += c;
+        } else if (c == '\'' && !inString) {
+            break;
+        } else if (!inString && (c == '(' || c == '[')) {
+            ++depth;
+            current += c;
+        } else if (!inString && (c == ')' || c == ']')) {
+            --depth;
+            current += c;
+        } else if (c == ',' && !inString && depth == 0) {
+            parts.append(current);
+            current.clear();
+        } else {
+            current += c;
+        }
+    }
+    parts.append(current);
+    return parts;
 }
 
 struct Block {

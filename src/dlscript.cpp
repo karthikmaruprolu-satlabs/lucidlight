@@ -158,6 +158,7 @@ void DLScriptEngine::run(QString code) {
     code = effective;
     m_stop = false;
     m_broken = false;
+    m_quit = false;
     m_failed = false;
     m_failMessage.clear();
     m_startMs = QDateTime::currentMSecsSinceEpoch();
@@ -310,9 +311,13 @@ void DLScriptEngine::run(QString code) {
         ok = false;
         error = m_failMessage;
     } else if (m_engine->isInterrupted()) {
-        ok = false;
         m_engine->setInterrupted(false);
-        error = m_broken ? QStringLiteral("Script stopped by DL.Quit") : QStringLiteral("Script stopped");
+        if (m_quit) {
+            // DL.Quit ends the script like reaching its natural end.
+        } else {
+            ok = false;
+            error = QStringLiteral("Script stopped by user");
+        }
     } else if (result.isError()) {
         ok = false;
         error = QStringLiteral("%1 at line %2")
@@ -372,11 +377,12 @@ DLObject::DLObject(DLScriptEngine *host) : QObject(host), m_host(host) {}
 bool DLObject::StartCommunication() {
     if (!m_host->m_comm)
         return false;
-    bool started = false;
-    // Blocking call into the main thread, which owns the ports.
-    QMetaObject::invokeMethod(m_host->m_comm, "restart", Qt::BlockingQueuedConnection,
-                              Q_RETURN_ARG(bool, started));
-    return started;
+    // Docklight: "Starts the communication, if not already running" — a
+    // running session is left untouched (no restart, counters keep).
+    if (m_host->m_comm->running())
+        return true;
+    m_host->callBridge("scriptStartCommunication", {});
+    return m_host->m_comm->running();
 }
 
 void DLObject::StopCommunication() {
@@ -478,9 +484,18 @@ bool DLObject::SendSequence(const QJSValue &nameOrIndex, const QString &paramete
         return false;
     }
     m_host->m_sendDone = false;
-    emit m_host->sendRequest(row, QString(), representation,
-                             parameters.isEmpty() ? QStringList()
-                                                  : QStringList{parameters});
+    // Docklight splits the parameter string into one value per wildcard
+    // area: separated by spaces for ASCII, by commas for HEX/DEC/BIN.
+    QStringList paramList;
+    if (!parameters.isEmpty()) {
+        const bool hexLike = representation.compare(QLatin1String("A"),
+                                                    Qt::CaseInsensitive) != 0;
+        paramList = hexLike ? parameters.split(',', Qt::SkipEmptyParts)
+                            : parameters.split(' ', Qt::SkipEmptyParts);
+        for (QString &p : paramList)
+            p = p.trimmed();
+    }
+    emit m_host->sendRequest(row, QString(), representation, paramList);
     m_host->waitUntil([this] { return m_host->m_sendDone; }, 30000);
     return true;
 }
@@ -888,7 +903,12 @@ void DLObject::Break() {
 }
 
 void DLObject::Quit() {
-    Break();
+    // Quit ends the script normally: stop the engine with the quit flag so
+    // the run reports success, like a script reaching its natural end.
+    m_host->m_quit = true;
+    m_host->m_stop = true;
+    if (m_host->jsEngine())
+        m_host->jsEngine()->setInterrupted(true);
 }
 
 void DLObject::Fail(const QString &message) {

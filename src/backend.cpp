@@ -608,7 +608,9 @@ bool Backend::buildSendElements(const Sequence &seq, const QStringList &paramete
     for (const auto &runInfo : runs) {
         // Docklight: one parameter fills the whole wildcard area with its
         // characters (ASCII), truncated or padded with blanks. Hex/Dec/Bin
-        // parameters are per-byte values separated by commas.
+        // parameters list one byte value per wildcard, space-separated
+        // ("20 31 20"); surplus values are ignored, shortfalls pad with
+        // ASCII code 0.
         const QString param = paramIndex < params.size() ? params.at(paramIndex) : QString();
         ++paramIndex;
         QStringList pieces;
@@ -624,7 +626,7 @@ bool Backend::buildSendElements(const Sequence &seq, const QStringList &paramete
             }
             continue;
         }
-        pieces = param.split(',', Qt::SkipEmptyParts);
+        pieces = param.split(' ', Qt::SkipEmptyParts);
         for (int k = 0; k < runInfo.second; ++k) {
             const QString piece = k < pieces.size() ? pieces.at(k) : QString();
             uchar value = 0;
@@ -980,7 +982,7 @@ void Backend::scriptSendSequence(int row, const QString &customData,
         else if (representation.compare(QLatin1String("D"), Qt::CaseInsensitive) == 0)
             paramFormat = DataFormat::Format::Dec;
         else if (representation.compare(QLatin1String("B"), Qt::CaseInsensitive) == 0)
-            paramFormat = DataFormat::Format::Dec;   // binary uses decimal numbers
+            paramFormat = DataFormat::Format::Bin;
         QString error;
         if (!buildSendElements(*seq, parameters, paramFormat, &elements, &error)) {
             m_log->appendEvent(tr("SendSequence %1: %2").arg(seq->name, error));
@@ -1102,6 +1104,12 @@ void Backend::runScriptFile(const QString &path) {
 
 QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {
     auto arg = [&args](int i) { return args.value(i); };
+    if (name == "scriptStartCommunication") {
+        if (m_comm->running())
+            return true;
+        toggleComm();
+        return m_comm->running();
+    }
     if (name == "scriptChannelStatus")
         return scriptChannelStatus(arg(0).toInt());
     if (name == "scriptChannelSettings")

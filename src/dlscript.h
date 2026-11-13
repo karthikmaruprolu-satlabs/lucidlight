@@ -114,6 +114,7 @@ private:
     std::atomic_bool m_stop {false};
     std::atomic_bool m_commRunning {false};
     std::atomic_bool m_parked {false};
+    std::atomic_bool m_quit {false};
     bool m_broken = false;
     bool m_failed = false;
     QString m_failMessage;
