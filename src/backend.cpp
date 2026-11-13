@@ -1133,22 +1133,28 @@ bool Backend::scriptSaveOptions(const QString &path) {
 // answers from the environment) and wake the worker when the answer lands.
 void Backend::scriptDialog(const QString &prompt, int buttons, const QString &title,
                            bool input, const QString &defaultText) {
-    // Headless auto-answer: LUCID_MSGBOX=6 answers buttons, LUCID_INPUTBOX
-    // provides text; without them a message box cancels and an input box
-    // returns the default text.
+    // Headless auto-answer: LUCID_MSGBOX gives the button code, LUCID_INPUTBOX
+    // the text; without them a message box answers OK (or Yes for yes/no
+    // boxes) and an input box returns the default text.
     const QByteArray boxAnswer = qgetenv(input ? "LUCID_INPUTBOX" : "LUCID_MSGBOX");
-    if (boxAnswer.isEmpty() && !qEnvironmentVariableIsEmpty("LUCID_HEADLESS")) {
+    if (qEnvironmentVariableIsSet("LUCID_HEADLESS")) {
         DLScriptEngine *engine = m_runner ? m_runner->engine() : nullptr;
         if (engine) {
-            const int answer = input ? 0
-                                     : (buttons & 4 ? 6 : 1);   // yes for yes/no, else OK
+            int answer;
+            if (input) {
+                answer = 0;
+            } else if (!boxAnswer.isEmpty()) {
+                answer = boxAnswer.toInt();
+            } else {
+                answer = buttons & 4 ? 6 : 1;   // yes for yes/no, else OK
+            }
             QMetaObject::invokeMethod(engine, "onDialogResult", Qt::QueuedConnection,
                                       Q_ARG(int, answer));
             if (input)
-                // text answers ride the dialog result through onDialogResult's
-                // int channel only for buttons; input needs a string channel.
                 QMetaObject::invokeMethod(engine, "onDialogText", Qt::QueuedConnection,
-                                          Q_ARG(QString, defaultText));
+                                          Q_ARG(QString, boxAnswer.isEmpty()
+                                                            ? defaultText
+                                                            : QString::fromLocal8Bit(boxAnswer)));
         }
         return;
     }

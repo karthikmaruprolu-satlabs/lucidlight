@@ -30,6 +30,8 @@ int runHeadless(const QString &projectPath, const QString &scriptPath, int durat
                 const QString &portA, const QString &portB, int mode, int baud, bool json,
                 const QString &outFile) {
     QTextStream out(stdout);
+    // Headless marker: dialogs auto-answer from LUCID_MSGBOX/LUCID_INPUTBOX.
+    qputenv("LUCID_HEADLESS", "1");
     Backend backend;
 
     auto stamp = [] { return QDateTime::currentDateTime().toString("HH:mm:ss.zzz"); };

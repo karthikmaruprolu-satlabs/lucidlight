@@ -129,12 +129,11 @@ bool DLScriptEngine::waitUntil(const std::function<bool()> &predicate, int timeo
     while (!predicate()) {
         if (m_stop)
             return false;
-        const int remaining = timeoutMs < 0 ? -1 : timeoutMs - int(timer.elapsed());
-        if (remaining <= 0)
-            return false;
+        if (timeoutMs >= 0 && timeoutMs - int(timer.elapsed()) <= 0)
+            return false;   // timed out; -1 means "wait without timeout"
         m_parked = true;
         QEventLoop loop;
-        park(loop, this, remaining);
+        park(loop, this, timeoutMs < 0 ? -1 : timeoutMs - int(timer.elapsed()));
         m_parked = false;
         processReceiveEvents();
     }
