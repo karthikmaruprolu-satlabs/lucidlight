@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 
+#include "commlink.h"
 #include "seriallink.h"
 
 // Settings for one communication channel (port A or port B), exposed to QML
@@ -21,7 +22,11 @@ public:
     explicit ChannelSettings(QObject *parent = nullptr) : QObject(parent) {}
 
     QString device() const { return m_device; }
-    void setDevice(const QString &device) { if (device != m_device) { m_device = device; emit changed(); } }
+    void setDevice(const QString &device) {
+        // Central device-string normalization ("host:port" → TCP client).
+        const QString normalized = CommLink::normalizeDevice(device);
+        if (normalized != m_device) { m_device = normalized; emit changed(); }
+    }
     int baud() const { return m_baud; }
     void setBaud(int baud) { if (baud != m_baud) { m_baud = baud; emit changed(); } }
     int dataBits() const { return m_dataBits; }

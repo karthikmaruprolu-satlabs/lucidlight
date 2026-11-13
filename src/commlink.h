@@ -55,6 +55,8 @@ public:
     //   UDP:host:port   peer with a fixed remote endpoint
     //   UDP:port        bind locally, receive from anyone
     static bool isNetworkDevice(const QString &device);
+    // "host:port" → "TCP:host:port" (Docklight device-string compatibility)
+    static QString normalizeDevice(const QString &device);
     // Factory for the transport a device string asks for. The caller owns
     // the link.
     static CommLink *create(const QString &device, QObject *parent);

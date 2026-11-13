@@ -786,10 +786,19 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
         return false;
     }
     // Forms: "DEVICE", "DEVICE:baud,P,D,S[,FLOW[,PEC]]", "baud,P,D,S..."
-    // Network device strings (TCPCLIENT:host:port, UNIXSERVER:/path, ...)
-    // carry colons of their own and must never be split apart.
+    // Network device strings (TCP:host:port, SERVER:port, UNIXSERVER:/path,
+    // ...) carry colons of their own and must never be split apart.
     if (CommLink::isNetworkDevice(text)) {
         target->setDevice(text.trimmed());
+        if (m_comm->running())
+            return m_comm->applySettings(m_a->config(), m_b->config());
+        return true;
+    }
+    // Docklight: a bare "host:port" makes the channel a TCP client.
+    static const QRegularExpression bareHost(
+        QStringLiteral("^([^,:\\s]+):(\\d+)$"));
+    if (bareHost.match(text).hasMatch()) {
+        target->setDevice(CommLink::normalizeDevice(text));
         if (m_comm->running())
             return m_comm->applySettings(m_a->config(), m_b->config());
         return true;
@@ -805,7 +814,7 @@ bool Backend::scriptSetChannelSettings(const QString &settings, int channel) {
         devicePart = text;
     }
     if (!devicePart.isEmpty())
-        target->setDevice(devicePart);
+        target->setDevice(CommLink::normalizeDevice(devicePart));
     if (!tail.isEmpty()) {
         const QStringList parts = tail.split(',');
         bool ok = false;

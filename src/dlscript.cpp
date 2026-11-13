@@ -714,6 +714,10 @@ int DLObject::WaitForSequence(const QJSValue &nameOrIndex, int maxCounter, int t
             QStringLiteral("Receive sequence not found: %1").arg(nameOrIndex.toString());
         return 0;
     }
+    // Docklight: WaitForSequence "starts the communication, if not already
+    // running".
+    if (!m_host->m_comm->running())
+        StartCommunication();
     // Snapshot receive sequences carry their id; resolve the counter through
     // the bridge (main thread owns the counters).
     int seqId = entry->id;
