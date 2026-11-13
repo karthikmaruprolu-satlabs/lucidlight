@@ -142,6 +142,8 @@ not source-compatible, but the DL API names and semantics are replicated.
       Debug.Break
 
 ## VBScript basics (JS equivalents)
+- [x] VBScript/JavaScript auto-detection: clear JS constructs (var/;/{/)
+      veto the VBScript translation
 - [x] Conversions Asc/Chr/HexToStr/StrToHex/HexToDec/DecToHex
 - [x] #include directive (script-side file inclusion)
 - [x] vbCrLf / vbOK / vbYes / MsgBox-button constants predefined

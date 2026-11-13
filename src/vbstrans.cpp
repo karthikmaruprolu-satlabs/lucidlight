@@ -1107,6 +1107,17 @@ bool looksLikeVbScript(const QString &source)
         QRegularExpression(QStringLiteral("^[ \\t]*For\\s+\\w+\\s*="),
                            QRegularExpression::MultilineOption),
     };
+    // JavaScript veto: any clear JS construct means this is not VBScript.
+    static const QRegularExpression jsMarkers[] = {
+        QRegularExpression(QStringLiteral("\\bvar\\s+")),
+        QRegularExpression(QStringLiteral("\\bfunction\\b")),
+        QRegularExpression(QStringLiteral("=>")),
+        QRegularExpression(QStringLiteral(";\\s*$")),
+        QRegularExpression(QStringLiteral("[{}]")),
+    };
+    for (const QRegularExpression &re : jsMarkers)
+        if (source.contains(re))
+            return false;
     for (const QRegularExpression &re : markers)
         if (source.contains(re))
             return true;
