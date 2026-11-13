@@ -2243,7 +2243,19 @@ private slots:
             "s = \"Hello World\"\n"
             "DL.AddComment Left(s, 5) & \"/\" & UCase(Mid(s, 7))\n"
             "If 3 = 3 Then DL.AddComment \"eq\"\n"
-            "If 3 <> 4 Then DL.AddComment \"neq\" Else DL.AddComment \"bad\"\n";
+            "If 3 <> 4 Then DL.AddComment \"neq\" Else DL.AddComment \"bad\"\n"
+            "With DL\n"
+            "  .AddComment \"with works\"\n"
+            "End With\n"
+            "Select Case 10\n"
+            "  Case 5, 10\n"
+            "    DL.AddComment \"five or ten\"\n"
+            "  Case Else\n"
+            "    DL.AddComment \"other\"\n"
+            "End Select\n"
+            "n = 5 _\n"
+            "    + 1\n"
+            "DL.AddComment \"cont \" & n\n";
         runner.run(QString::fromUtf8(vbs));
         QTRY_VERIFY_WITH_TIMEOUT(finishedOk, 5000);
         QVERIFY2(finishedOk, qPrintable(notes.join(" | ")));
@@ -2259,6 +2271,9 @@ private slots:
         QVERIFY(all.contains("Hello/WORLD"));
         QVERIFY(all.contains("eq"));
         QVERIFY(all.contains("neq"));
+        QVERIFY(all.contains("with works"));
+        QVERIFY(all.contains("five or ten"));
+        QVERIFY(all.contains("cont 6"));
         QVERIFY(!all.contains("high"));
         QVERIFY(!all.contains("bad"));
     }
