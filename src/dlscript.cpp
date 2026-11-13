@@ -1481,7 +1481,7 @@ QJSValue DLObject::OnSend_Peek(int charNo, const QString &representation) {
         if (r == 'H')
             return QJSValue(QStringLiteral("%1").arg(value, 2, 16, QChar('0')).toUpper());
         if (r == 'D')
-            return QJSValue(QString::number(value));
+            return QJSValue(QStringLiteral("%1").arg(value, 3, 10, QChar('0')));
         if (r == 'B')
             return QJSValue(QStringLiteral("%1").arg(value, 8, 2, QChar('0')));
         if (r == 'A')
@@ -1517,7 +1517,7 @@ QJSValue DLObject::OnReceive_Peek(int charNo, const QString &representation) {
         if (r == 'H')
             return QJSValue(QStringLiteral("%1").arg(value, 2, 16, QChar('0')).toUpper());
         if (r == 'D')
-            return QJSValue(QString::number(value));
+            return QJSValue(QStringLiteral("%1").arg(value, 3, 10, QChar('0')));
         if (r == 'B')
             return QJSValue(QStringLiteral("%1").arg(value, 8, 2, QChar('0')));
         if (r == 'A')
