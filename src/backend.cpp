@@ -451,13 +451,15 @@ void Backend::sendSequence(int row) {
     armRepeat(seq);
 }
 
-void Backend::armRepeat(const Sequence *seq) {
+void Backend::armRepeat(const Sequence *seq, const QStringList &parameters) {
     if (!seq || seq->repeatIntervalMs <= 0)
         return;
     if (m_nextRepeatAt.contains(seq->id)) {
         m_nextRepeatAt.remove(seq->id);
+        m_repeatParameters.remove(seq->id);
         m_log->appendEvent(tr("Repeat stopped: %1").arg(seq->name));
     } else {
+        m_repeatParameters.insert(seq->id, parameters);
         m_nextRepeatAt.insert(seq->id, m_repeatClock.elapsed() + seq->repeatIntervalMs);
         m_log->appendEvent(tr("Repeat every %1 ms: %2").arg(seq->repeatIntervalMs).arg(seq->name));
     }
@@ -474,7 +476,7 @@ void Backend::sendSequenceWithParams(int row, const QStringList &parameters) {
         return;
     }
     transmitElements(elements);
-    armRepeat(seq);
+    armRepeat(seq, parameters);
 }
 
 void Backend::sendByHotkey(int keyNumber) {
@@ -502,9 +504,18 @@ void Backend::checkRepeats() {
         for (const Sequence &seq : m_sequences->sequences()) {
             if (seq.id != seqId || !seq.enabled)
                 continue;
-            const auto parsed = DataFormat::parse(seq.data, seq.format);
-            if (parsed.ok() && m_comm->send(parsed.bytes()))
-                m_nextRepeatAt.insert(seqId, now + seq.repeatIntervalMs);
+            // Periodic sends go through the same builder as manual sends so
+            // wildcard parameters and checksum areas are recomputed each time,
+            // exactly like Docklight's periodic send.
+            QVector<ParsedBytes::Element> elements;
+            QString error;
+            if (!buildSendElements(seq, m_repeatParameters.value(seqId),
+                                   DataFormat::Format::Text, &elements, &error)) {
+                m_log->appendEvent(tr("Repeat send failed: %1").arg(seq.name));
+                break;
+            }
+            transmitElements(elements);
+            m_nextRepeatAt.insert(seqId, now + seq.repeatIntervalMs);
             break;
         }
     }

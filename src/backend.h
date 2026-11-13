@@ -179,7 +179,7 @@ private:
     QString expandCommentMacros(const QString &text, const Sequence *seq,
                                 const QByteArray &received, int channel);
     int indexOfSequence(int id) const;
-    void armRepeat(const Sequence *seq);
+    void armRepeat(const Sequence *seq, const QStringList &parameters = QStringList());
     void logComment(const QString &text);
     void logEvent(const QString &text);
 
@@ -210,5 +210,6 @@ private:
     int m_clockStampInterval = 0;   // seconds, 0 = off
     bool m_keyboardConsole = false;
     QHash<int, qint64> m_nextRepeatAt;
+    QHash<int, QStringList> m_repeatParameters;   // parameters captured at arm time
     QElapsedTimer m_repeatClock;
 };

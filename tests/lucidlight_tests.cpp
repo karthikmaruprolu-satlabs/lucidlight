@@ -1982,6 +1982,52 @@ private slots:
         ::close(master);
     }
 
+    void sequenceRepeatRecomputesChecksum()
+    {
+        // Docklight's periodic send recalculates checksum areas on every
+        // transmission; the repeat path must use the same builder as the
+        // manual send.
+        char slave[128];
+        int master = makePty(slave, sizeof(slave));
+        QVERIFY(master >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slave);
+        const int row = backend.sequences()->add(
+            QVariantMap{{"name", "CRC"}, {"isSend", true}, {"format", 1},
+                        {"data", "01 04 00 00"}, {"checksumSpec", "CRC-MODBUS"},
+                        {"checksumMode", 0}, {"repeatIntervalMs", 80}});
+        QString toastText;
+        QObject::connect(&backend, &Backend::toast, &backend,
+                         [&](const QString &t) { toastText = t; });
+        backend.toggleComm();
+        QVERIFY(backend.comm()->running());
+
+        backend.sendSequence(row);
+        QByteArray seen;
+        char buffer[128];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 700) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+            const ssize_t n = ::read(master, buffer, sizeof(buffer));
+            if (n > 0)
+                seen.append(buffer, int(n));
+        }
+        backend.sendSequence(row);   // disarm
+        backend.comm()->stop();
+        ::close(master);
+        // 01 04 + CRC-MODBUS big-endian? CalcChecksum("CRC-MODBUS","0104") =
+        // reflected low byte first. Every repeat must carry the same CRC.
+        QString rows;
+        for (int i = 0; i < backend.log()->count(); ++i)
+            rows += QStringLiteral("[%1]").arg(backend.log()->textAt(i));
+        QVERIFY2(seen.size() >= 8, qPrintable("hex=" + QString::fromLatin1(seen.toHex(' '))
+                 + " rows=" + rows + " toast=" + toastText));
+        QCOMPARE(seen.mid(0, 4), seen.mid(seen.size() - 4, 4));
+        QCOMPARE(seen.mid(0, 2), QByteArray("\x01\x04", 2));
+    }
+
     void scriptEchoesThroughRealPort()
     {
         char slave[128];

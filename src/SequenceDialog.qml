@@ -27,7 +27,7 @@ Popup {
         formatBox.currentIndex = 0;
         dataArea.text = "";
         hotkeyBox.currentIndex = 0;
-        repeatField.text = "0";
+        repeatField.text = "";
         replyBox.currentIndex = -1;
         docField.text = "";
         commentField.text = "";
@@ -50,7 +50,8 @@ Popup {
         formatBox.currentIndex = seq.format;
         dataArea.text = seq.data;
         hotkeyBox.currentIndex = seq.hotkey > 0 ? seq.hotkey : 0;
-        repeatField.text = String(seq.repeatIntervalMs);
+        repeatField.text = seq.repeatIntervalMs > 0
+            ? String(Math.round(seq.repeatIntervalMs / 10) / 100) : "";
         replyBox.currentIndex = -1;
         for (let i = 0; i < replyBox.count; ++i)
             if (replyBox.valueAt(i) === seq.replyToId)
@@ -72,7 +73,8 @@ Popup {
             format: formatBox.currentIndex,
             data: dataArea.text,
             hotkey: kindBox.currentIndex === 0 ? hotkeyBox.currentIndex : 0,
-            repeatIntervalMs: kindBox.currentIndex === 0 ? parseInt(repeatField.text, 10) || 0 : 0,
+            repeatIntervalMs: kindBox.currentIndex === 0
+                ? Math.round((parseFloat(repeatField.text.replace(",", ".")) || 0) * 1000) : 0,
             replyToId: kindBox.currentIndex === 1 && replyBox.currentIndex >= 0 ? replyBox.currentValue : -1,
             comment: kindBox.currentIndex === 0 ? docField.text : commentField.text,
             trigger: kindBox.currentIndex === 1 && triggerBox.checked,
@@ -136,11 +138,11 @@ Popup {
                 id: repeatField
                 Layout.preferredWidth: 110
                 visible: kindBox.currentIndex === 0
-                placeholderText: qsTr("Repeat ms")
+                placeholderText: qsTr("Repeat s")
                 font.pixelSize: 12
                 font.family: win.monoFont
                 ToolTip.visible: repeatField.hovered
-                ToolTip.text: qsTr("Resend every N ms while active; 0 = once")
+                ToolTip.text: qsTr("Send periodically after N seconds (0.01 - 9999, decimals allowed); empty or 0 = send once")
                 ToolTip.delay: 500
             }
         }
