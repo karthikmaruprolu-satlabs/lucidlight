@@ -152,6 +152,17 @@ Popup {
             wrapMode: TextArea.WrapAnywhere
             font.family: win.monoFont
             font.pixelSize: 12
+            // Docklight's control character shortcuts: Ctrl+Enter inserts
+            // <CR>, Ctrl+Shift+Enter inserts <LF> (project notation).
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    if (event.modifiers & Qt.ControlModifier) {
+                        dataArea.insert(dataArea.cursorPosition,
+                                        event.modifiers & Qt.ShiftModifier ? "[0A]" : "[0D]");
+                        event.accepted = true;
+                    }
+                }
+            }
             color: theme.fg
             placeholderText: kindBox.currentIndex === 0
                              ? qsTr("Data to send — [0D] inserts a hex byte, [[ a literal [")

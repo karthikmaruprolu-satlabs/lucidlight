@@ -1744,6 +1744,56 @@ private slots:
         ::close(masterDummy);
     }
 
+    void monitorModeForwardsData()
+    {
+        // Docklight's Data Forwarding: in Monitor mode, data received on one
+        // port is re-transmitted on the opposite port's TX line (this is how
+        // a monitoring cable routes traffic through the app). The expert
+        // option can turn it off.
+        char slaveA[128], slaveB[128];
+        int masterA = makePty(slaveA, sizeof(slaveA));
+        int masterB = makePty(slaveB, sizeof(slaveB));
+        QVERIFY(masterA >= 0 && masterB >= 0);
+
+        Backend backend;
+        backend.channelA()->setDevice(slaveA);
+        backend.channelB()->setDevice(slaveB);
+        backend.comm()->setMode(CommManager::Monitor);
+        QVERIFY(backend.comm()->start(backend.channelA()->config(),
+                                      backend.channelB()->config()));
+        QCOMPARE(::write(masterA, "FWD1", 4), 4);
+        QTest::qWait(300);
+        QByteArray got;
+        char buffer[64];
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1000 && !got.contains("FWD1")) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            const ssize_t n = ::read(masterB, buffer, sizeof(buffer));
+            if (n > 0)
+                got.append(buffer, int(n));
+        }
+        QVERIFY(got.contains("FWD1"));
+
+        // Forwarding off: data stays in the app.
+        backend.comm()->setDataForwarding(false);
+        QCOMPARE(::write(masterA, "FWD2", 4), 4);
+        QTest::qWait(300);
+        QByteArray got2;
+        timer.restart();
+        while (timer.elapsed() < 400) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            const ssize_t n = ::read(masterB, buffer, sizeof(buffer));
+            if (n > 0)
+                got2.append(buffer, int(n));
+        }
+        QVERIFY(!got2.contains("FWD2"));
+
+        backend.comm()->stop();
+        ::close(masterA);
+        ::close(masterB);
+    }
+
     void commentMacrosExpandOnMatch()
     {
         char slave[128];

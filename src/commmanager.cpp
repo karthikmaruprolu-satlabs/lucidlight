@@ -33,6 +33,13 @@ void CommManager::setMode(int mode) {
     emit modeChanged();
 }
 
+void CommManager::setDataForwarding(bool on) {
+    if (on == m_dataForwarding)
+        return;
+    m_dataForwarding = on;
+    emit dataForwardingChanged();
+}
+
 void CommManager::resetCounters() {
     m_txBytes = 0;
     m_rxBytes = 0;
@@ -195,4 +202,18 @@ void CommManager::handleIncoming(int channel, const QByteArray &data) {
     m_rxBytes += data.size();
     emit countersChanged();
     emit incoming(channel, data);
+    // Docklight's Data Forwarding (Monitor mode): data received on one port
+    // goes out on the opposite port's TX line, so a plain monitoring cable
+    // can route traffic through the app.
+    if (m_mode == Monitor && m_dataForwarding && (channel == 0 || channel == 1)) {
+        CommLink *target = channel == 0 ? m_b : m_a;
+        if (target && target->isOpen()) {
+            const qint64 written = target->write(data);
+            if (written > 0) {
+                m_txBytes += written;
+                emit countersChanged();
+                emit transmitted(channel == 0 ? 1 : 0, data.left(int(written)));
+            }
+        }
+    }
 }

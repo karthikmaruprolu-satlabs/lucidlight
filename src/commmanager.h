@@ -19,6 +19,10 @@ class CommManager : public QObject {
     Q_PROPERTY(int mode READ mode WRITE setMode NOTIFY modeChanged)
     Q_PROPERTY(qint64 txBytes READ txBytes NOTIFY countersChanged)
     Q_PROPERTY(qint64 rxBytes READ rxBytes NOTIFY countersChanged)
+    // Docklight's Data Forwarding (Monitor mode): RX on one port is
+    // re-transmitted on the opposite port's TX line. On by default; the
+    // expert option turns it off for pure listening setups.
+    Q_PROPERTY(bool dataForwarding READ dataForwarding WRITE setDataForwarding NOTIFY dataForwardingChanged)
 
 public:
     enum Mode { Single = 0, Redirect = 1, Monitor = 2 };
@@ -30,6 +34,8 @@ public:
     bool running() const { return m_running; }
     int mode() const { return m_mode; }
     void setMode(int mode);
+    bool dataForwarding() const { return m_dataForwarding; }
+    void setDataForwarding(bool on);
     qint64 txBytes() const { return m_txBytes; }
     qint64 rxBytes() const { return m_rxBytes; }
     void resetCounters();
@@ -61,6 +67,7 @@ public:
 signals:
     void runningChanged();
     void modeChanged();
+    void dataForwardingChanged();
     void countersChanged();
     // Data the devices sent; channel is 0 for A, 1 for B.
     void incoming(int channel, const QByteArray &data);
@@ -79,6 +86,7 @@ private:
     QHash<int, CommLink *> m_side;
     std::atomic_bool m_running {false};
     int m_mode = Single;
+    bool m_dataForwarding = true;
     qint64 m_txBytes = 0;
     qint64 m_rxBytes = 0;
     SerialConfig m_lastA, m_lastB;

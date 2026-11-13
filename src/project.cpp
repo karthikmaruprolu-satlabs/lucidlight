@@ -25,6 +25,7 @@ QJsonObject Project::save(CommManager *comm, ChannelSettings *a, ChannelSettings
         object["parityErrorChar"] = settings->parityErrorChar();
         return object;
     };
+    state["dataForwarding"] = comm ? comm->dataForwarding() : true;
     state["channelA"] = channelJson(a);
     state["channelB"] = channelJson(b);
 
@@ -80,6 +81,8 @@ QString Project::load(const QJsonObject &state, CommManager *comm, ChannelSettin
         settings->setFlow(object.value("flow").toInt(0));
         settings->setParityErrorChar(object.value("parityErrorChar").toInt(int('?')));
     };
+    if (comm)
+        comm->setDataForwarding(state.value("dataForwarding").toBool(true));
     applyChannel(a, state.value("channelA"));
     applyChannel(b, state.value("channelB"));
 

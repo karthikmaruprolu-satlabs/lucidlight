@@ -233,6 +233,26 @@ Popup {
                 if (pecBox.model[k].value === settings.parityErrorChar)
                     pecBox.currentIndex = k;
         }
+
+        // Docklight's expert option: Data Forwarding in Monitor mode.
+        CheckBox {
+            id: forwardingBox
+            Layout.fillWidth: true
+            text: qsTr("Forward data in Monitor mode (Data Forwarding)")
+            font.pixelSize: 12
+            contentItem: Label {
+                text: forwardingBox.text
+                font.pixelSize: 12
+                color: theme.muted
+                leftPadding: forwardingBox.indicator.width + forwardingBox.spacing
+                verticalAlignment: Text.AlignVCenter
+            }
+            checked: backend.comm.dataForwarding
+            onToggled: backend.comm.dataForwarding = checked
+            ToolTip.visible: forwardingBox.hovered
+            ToolTip.text: qsTr("RX received on one port is re-transmitted on the opposite port's TX line — the default for monitoring cables")
+            ToolTip.delay: 500
+        }
     }
 
     onOpened: settingsColumn.syncFromSettings()
