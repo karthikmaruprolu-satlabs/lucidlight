@@ -2202,7 +2202,7 @@ private slots:
         QVERIFY(csv.contains("\"RX2\""));
         QVERIFY(csv.contains("\"note, too\""));
         // Strictly tabular: no prose lines anywhere in the file.
-        QVERIFY(!csv.contains("Docklight Log File"));
+        QVERIFY(!csv.contains("Log File"));   // strictly tabular
     }
 
     void sequenceLibraryRoundTrip()
@@ -2271,7 +2271,7 @@ private slots:
         QVERIFY(md.contains("| TX1 |"));
         QVERIFY(md.contains("| RX1 |"));
         QVERIFY(md.contains("| Comment | `note with \\| pipe` |"));
-        QVERIFY(md.contains("*Docklight Log File stopped*"));
+        QVERIFY(md.contains("*Lucidlight Log File stopped*"));
     }
 
     void recentFilesTrackOpenAndSave()

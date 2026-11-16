@@ -1245,7 +1245,7 @@ QString DLObject::GetEnvironment(const QString &name) {
     // the LUCIDLIGHT_ aliases.
     const QString upper = name.toUpper();
     if (upper == "DOCKLIGHT_VERSION" || upper == "LUCIDLIGHT_VERSION")
-        return QStringLiteral("Lucidlight V0.2 (Docklight Scripting compatible)");
+        return QStringLiteral("Lucidlight V0.3 (Docklight Scripting compatible)");
     if (upper == "DOCKLIGHT_SCRIPTDIR" || upper == "LUCIDLIGHT_SCRIPTDIR")
         return QFileInfo::exists(QStringLiteral("script.js")) ? QStringLiteral(".") : QStringLiteral(".");
     if (upper == "DOCKLIGHT_PORTLIST" || upper == "LUCIDLIGHT_PORTLIST")

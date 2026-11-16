@@ -192,7 +192,7 @@ void FileLogger::writeHeader(File &f, const QString &representation) {
             : m_htmlStyle;
         *f.stream << "<!DOCTYPE html>\n<html>\n<head>\n"
                   << "<meta charset=\"utf-8\">\n"
-                  << "<title>Docklight Log File</title>\n"
+                  << "<title>Lucidlight Log File</title>\n"
                   << "<style>\nbody { background:#ffffff; }\n"
                   << "pre { " << css << "; }\n"
                   << "</style>\n</head>\n<body>\n<pre>\n";
@@ -205,7 +205,7 @@ void FileLogger::writeHeader(File &f, const QString &representation) {
         *f.stream << "time,direction,channel,data_hex,data_ascii\n";
     if (m_format != 4) {
         // CSV keeps the file strictly tabular — no prose lines.
-        *f.stream << "Docklight Log File started... ("
+        *f.stream << "Lucidlight Log File started... ("
                   << stampText(QDateTime::currentMSecsSinceEpoch())
                   << ", " << representation << ")\n";
         if (m_format == 3)
@@ -215,14 +215,14 @@ void FileLogger::writeHeader(File &f, const QString &representation) {
 
 void FileLogger::writeFooter(File &f) {
     if (m_format != 4)
-        *f.stream << "Docklight Log File stopped ("
+        *f.stream << "Lucidlight Log File stopped ("
                   << stampText(QDateTime::currentMSecsSinceEpoch()) << ")\n";
     if (m_format == 1)
         *f.stream << "</pre>\n</body>\n</html>\n";
     else if (m_format == 2)
         *f.stream << "}\n";
     else if (m_format == 3)
-        *f.stream << "\n*Docklight Log File stopped*\n";
+        *f.stream << "\n*Lucidlight Log File stopped*\n";
 }
 
 void FileLogger::writeRow(File &f, const QString &representation, int direction, int channel,
