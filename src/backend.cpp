@@ -101,6 +101,11 @@ Backend::Backend(QObject *parent)
     connect(m_runner, &ScriptRunner::commentRequested, m_log,
             [this](const QString &text, bool pendingLine) {
         m_log->appendComment(text, pendingLine);
+        // Script comments belong in live log files too (Docklight's
+        // AddComment lands in the log; the window-merge behavior stays in
+        // the comm window only).
+        m_logger.onRow(CommLog::Comment, -1, QByteArray(), text,
+                       QDateTime::currentMSecsSinceEpoch(), false);
     });
     connect(m_runner, &ScriptRunner::clearRequested, m_log, &CommLog::clear);
     connect(m_runner, &ScriptRunner::saveLogRequested, this, &Backend::saveLogTo);
@@ -1297,6 +1302,8 @@ bool Backend::scriptDispatch(const QString &path) {
     connect(runner, &ScriptRunner::commentRequested, m_log,
             [this](const QString &text, bool pendingLine) {
                 m_log->appendComment(text, pendingLine);
+                m_logger.onRow(CommLog::Comment, -1, QByteArray(), text,
+                               QDateTime::currentMSecsSinceEpoch(), false);
             });
     connect(runner, &ScriptRunner::outputLine, this,
             [this](const QString &line, bool error) {
