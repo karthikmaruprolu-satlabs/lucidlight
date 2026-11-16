@@ -275,18 +275,24 @@ ApplicationWindow {
                 Layout.preferredWidth: 108
                 Layout.preferredHeight: 36
                 checked: backend.running
-                contentItem: RowLayout {
-                    spacing: 8
-                    Text {
-                        text: backend.running ? "■" : "▶"
-                        font.pixelSize: 13
-                        color: backend.running ? theme.red : theme.green
-                    }
-                    Label {
-                        text: backend.running ? qsTr("Stop") : qsTr("Start")
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
-                        color: startButton.hovered ? theme.fg : theme.bright
+                contentItem: Item {
+                    implicitWidth: contentRow.implicitWidth
+                    implicitHeight: contentRow.implicitHeight
+                    RowLayout {
+                        id: contentRow
+                        anchors.centerIn: parent
+                        spacing: 8
+                        Text {
+                            text: backend.running ? "■" : "▶"
+                            font.pixelSize: 13
+                            color: backend.running ? theme.red : theme.green
+                        }
+                        Label {
+                            text: backend.running ? qsTr("Stop") : qsTr("Start")
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            color: startButton.hovered ? theme.fg : theme.bright
+                        }
                     }
                 }
                 background: Rectangle {
