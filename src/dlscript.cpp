@@ -1014,8 +1014,16 @@ QString DLObject::Env(const QString &name, const QString &fallback) {
 }
 
 void DLObject::SaveLog(const QString &path) {
-    if (!path.isEmpty())
-        emit m_host->saveLogRequested(path);
+    if (path.isEmpty())
+        return;
+    // Synchronous through the bridge: Docklight's SaveLog returns with the
+    // file on disk, and a SaveLog-then-Quit script must not race the queued
+    // delivery against teardown.
+    if (m_host->m_bridge) {
+        m_host->callBridge("scriptSaveLog", {path});
+        return;
+    }
+    emit m_host->saveLogRequested(path);
 }
 
 // ---------------------------------------------------------------------------

@@ -1380,6 +1380,10 @@ QVariant Backend::scriptInvoke(const QString &name, const QVariantList &args) {
         return m_modbusDecode;
     if (name == "scriptDispatch")
         return scriptDispatch(arg(0).toString());
+    if (name == "scriptSaveLog") {
+        saveLogTo(arg(0).toString());
+        return true;
+    }
     if (name == "scriptStopLogging") {
         scriptStopLogging();
         return {};
