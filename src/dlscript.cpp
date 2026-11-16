@@ -89,6 +89,11 @@ void DLScriptEngine::queueReceiveEvent(int id, int index, const QString &name,
     event.timestampMs = timestampMs;
     {
         QMutexLocker lock(&m_queueMutex);
+        // Bound the queue: a script parked in a long blocking call does not
+        // drain DL_OnReceive events; without a cap the queue (and RSS) grows
+        // with every received byte for as long as the wait lasts.
+        if (m_receiveQueue.size() >= 4096)
+            m_receiveQueue.removeFirst();
         m_receiveQueue.append(event);
     }
     emit incomingWakeup();

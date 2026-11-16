@@ -5,6 +5,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QGuiApplication>
@@ -145,6 +146,14 @@ int runHeadless(const QString &projectPath, const QString &scriptPath, int durat
         // Both timers race: whoever finishes first ends the run.
         loop.exec();
         backend.scripts()->stop();
+        // A script may be parked in a blocking bridge call or an endless
+        // wait; keep serving queued events so it can notice the stop and
+        // unwind before the runner thread is joined (a QThread destroyed
+        // while its run() is still executing aborts the process).
+        QElapsedTimer stopWait;
+        stopWait.start();
+        while (backend.scripts()->running() && stopWait.elapsed() < 4000)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
         backend.stopDispatches();
         exitCode = scriptDone && !scriptOk ? 1 : 0;
         if (json) {
