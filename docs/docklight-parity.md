@@ -93,6 +93,8 @@ not source-compatible, but the DL API names and semantics are replicated.
 - [x] DL.AddComment (timeStampAfterComment, lineBreakAndPadding)
 - [x] DL.GetDocklightTimeStamp ([dateTime] [, millis] [, trimmed])
 - [x] DL.GetTimeStamp — Lucidlight-friendly alias for the same call (the Docklight name is kept verbatim for script compatibility)
+- [x] DL.SaveLog is synchronous through the bridge — a SaveLog-then-Quit script writes the file before teardown (was a queued signal that headless could drop; dispatched runners get it via the same dispatch table)
+- [x] 3-hour soak passed (2026-11-16): PTY loopback, 2 dispatched workers, live txt logging in 4 representations, µs stamps, Modbus decode on — 180/180 per-minute echo checks, 18/18 Modbus decodes, RSS bounded ~40 MB, clean exit. Caught and fixed: script comments missing from live logs, headless teardown abort, receive-queue growth, SaveLog race.
 - [x] DL.Pause + DL.Wait alias
 - [x] DL.GetReceiveCounter(nameOrIndex) / DL.ResetReceiveCounter([nameOrIndex])
 - [x] DL.OpenProject / DL.Quit
