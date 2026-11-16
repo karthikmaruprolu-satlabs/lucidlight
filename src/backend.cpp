@@ -1317,8 +1317,21 @@ bool Backend::scriptDispatch(const QString &path) {
 }
 
 void Backend::stopDispatches() {
+    if (m_dispatches.isEmpty())
+        return;
     for (ScriptRunner *runner : m_dispatches)
         runner->stop();
+    // Wait until the worker threads actually finished. stop() is
+    // asynchronous (the engines exit via queued events); destroying the
+    // runners while their QThread still runs aborts with "QThread:
+    // Destroyed while thread is still running".
+    QElapsedTimer waitTimer;
+    waitTimer.start();
+    while (!m_dispatches.isEmpty() && waitTimer.elapsed() < 4000) {
+        QEventLoop drain;
+        QTimer::singleShot(20, &drain, &QEventLoop::quit);
+        drain.exec();
+    }
 }
 
 void Backend::runScriptFile(const QString &path) {
