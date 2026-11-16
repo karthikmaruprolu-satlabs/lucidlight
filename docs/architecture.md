@@ -84,6 +84,9 @@ depends on the ones above it.
 
 - **`SequenceModel`**: send/receive sequences with wildcard parameters,
   hotkeys, repeat, reply-to chains, checksum specs, trigger actions.
+  **`SequenceProxy`** is the panel's grouped view (sends first, receives
+  second) — a plain mapping model with a queued rebuild; the source order
+  stays the scripting index.
 - **`SequenceMatcher`**: streaming receive-pattern matcher per channel
   (`?` any byte, `#` digit runs, function characters), fires triggers
   (comment, checksum validation, snapshot, stop-run) and answers send

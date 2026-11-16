@@ -47,7 +47,7 @@ One JSON object per line (NDJSON) on stdout:
     { "name": "Ping", "isSend": true, "format": "text", "data": "PING[0D][0A]", "hotkey": 1 },
     { "name": "Ack", "isSend": false, "format": "text", "data": "ACK", "replyToId": -1 }
   ],
-  "script": "DL.Send(\"PING\\r\"); if (!DL.WaitForSequence(\"Ack\", 1000)) DL.Fail(\"no ack\");",
+  "script": "DL.Send(\"PING\\r\"); if (!DL.WaitForSequence(\"Ack\", 1, 1000)) DL.Fail(\"no ack\");",
   "display": { "format": "text", "timestamps": true, "delta": false }
 }
 ```
@@ -79,13 +79,17 @@ DL.Receive(16, 500);                  // next 16 bytes as string, or false
 DL.ReceiveLine(1000);                 // next line (up to CR/LF, terminator consumed)
 DL.ReceiveStr("OK", 1000);            // true when the text appears (consumes stream)
 DL.ReceiveHex("AA ?? 55", 1000);      // matched bytes as hex, or false
-DL.WaitForSequence("Ack", 1000);      // true when the named receive sequence matches
+DL.WaitForSequence("Ack", 1, 1000);   // wait for hit 1 of the receive
+                                      // sequence, max 1000 ms (returns the
+                                      // hit counter; no timeout = wait forever)
 DL.Dispatch("helper.js");             // run another script in parallel
                                       // (own thread, shared comm; max 8)
 DL.SetModbusDecode(true);             // annotate valid Modbus RTU frames
                                       // inline in the log (FC, addr, regs)
 DL.Wait(250); DL.Pause();
 DL.Comment("note"); DL.ClearComm(); DL.ShowMessage("hello");
+DL.GetTimeStamp();                    // date/time stamp (Docklight's
+                                      // GetDocklightTimeStamp also works)
 DL.HexToStr(h); DL.StrToHex(s); DL.HexToDec(h); DL.DecToHex(n); DL.Asc(c); DL.Chr(n);
 DL.SendBreak(200); DL.SetDTR(true); DL.SetRTS(false);
 DL.GetCTS(); DL.GetDSR(); DL.GetDCD(); DL.GetRI();

@@ -1,5 +1,5 @@
 .\" Lucidlight manual page
-.TH LUCIDLIGHT 1 "November 2026" "lucidlight 0.3.2" "User Commands"
+.TH LUCIDLIGHT 1 "November 2026" "lucidlight 0.3.3" "User Commands"
 .SH NAME
 lucidlight \- serial monitor, terminal, and test scripting
 .SH SYNOPSIS
@@ -60,10 +60,12 @@ receive patterns. Text, HEX, DEC and Binary representations are supported.
 .SH SCRIPTING
 Scripts access the
 .B DL
-object: DL.SendHex, DL.SendStr, DL.WaitForSequence, DL.Comment, DL.Pause,
-checksum generation, DL_OnReceive / DL_OnSend event handlers, and more. See
-the in-app help (? key) for the full reference. Classic Docklight VBScript
-samples are auto-translated.
+object: DL.SendHex, DL.SendStr, DL.WaitForSequence(name, maxCounter, timeout),
+DL.Comment, DL.Pause, checksum generation, DL.GetTimeStamp,
+DL_OnReceive / DL_OnSend event handlers, and more. See the in-app help
+(? key) for the full reference. Classic Docklight VBScript samples are
+auto-translated; dispatched scripts (DL.Dispatch) run in parallel worker
+threads sharing the channels.
 .SH FILES
 .TP
 .I ~/.local/state/lucidlight/session.json

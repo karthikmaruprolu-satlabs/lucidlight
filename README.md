@@ -6,7 +6,7 @@ A serial monitor, terminal, and test scripting tool for Linux — built in the
 spirit of [Docklight Scripting](https://www.docklight.de/): watch the bytes
 flow, poke the device, automate the whole conversation with a script.
 
-Current release: **0.3.3** · 105 tests · CI-green on every push.
+Current release: **0.3.3** · 106 tests · CI-green on every push.
 
 ## Features
 
@@ -38,7 +38,9 @@ Current release: **0.3.3** · 105 tests · CI-green on every push.
   seconds-only with 6 decimals (CLOCK_REALTIME, transport-independent:
   serial, TCP, UDP, UNIX all get the same precision), plus per-row delta
   columns. Log files follow the window's mode.
-- **Send / receive sequences** — named snippets in Text/Hex/Dec/Binary
+- **Send / receive sequences** — grouped in the panel under *Send* and
+  *Receive* section headers (the combined index is what scripts and hotkeys
+  use). Named snippets in Text/Hex/Dec/Binary
   notation with wildcard parameters, function characters (`&` delay, `%`
   break, `!` handshake), **checksum areas** (MOD256, XOR, LRC, LRC-ASCII,
   CRC-7/8/16/32, DOW, MODBUS, CCITT, XMODEM… or a generic
@@ -204,11 +206,12 @@ DL.StopCommunication();
 | `DL.Break()` | stop the script |
 | `DL.Fail(message)` | stop and fail the run (headless exit code 1) |
 | `DL.Assert(condition, message)` | `Fail` when the condition is false |
-| `DL.WaitForSequence(name, timeoutMs)` | wait for a named receive sequence to match |
+| `DL.WaitForSequence(nameOrIndex, maxCounter, timeoutMs)` | wait until the receive sequence's hit counter reaches `maxCounter` (default 1) or `timeoutMs` passes; returns the counter value. Without a timeout it waits forever |
 | `DL.SetMicroStamps(on)` / `DL.GetMicroStamps()` | µs-precision seconds-only stamps |
 | `DL.SetHtmlStyle(css)` / `DL.GetHtmlStyle()` | CSS of exported `.htm` logs |
 | `DL.Env(name, fallback)` | read an environment variable |
 | `DL.SaveLog(path)` | dump the communication window so far to a file |
+| `DL.GetTimeStamp()` | formatted date/time stamp (alias of `DL.GetDocklightTimeStamp`, the Docklight API name kept for script compatibility) |
 | `DL.HexToStr(h)` / `DL.StrToHex(s)` | byte↔string (1:1, Latin-1) |
 | `DL.HexToDec(h)` / `DL.DecToHex(d, digits)` | number conversions |
 | `DL.Asc(ch)` / `DL.Chr(n)` | character code helpers |
@@ -250,7 +253,7 @@ for the socat recipes.
 
 ```sh
 ./build.sh          # qmake6 + make into build/lucidlight
-./test.sh           # 105 unit and end-to-end tests (offscreen)
+./test.sh           # 106 unit and end-to-end tests (offscreen)
 ./asan.sh           # AddressSanitizer build, on demand (build/asan/)
 tests/grab_harness   # LUCID_SIM=1 LUCID_TAB=script ./grab_harness — screenshots offscreen
 ```
@@ -262,7 +265,7 @@ agent skill), `examples/` sample projects, `pkgbuild/` Arch packaging. One
 
 ## Continuous integration
 
-Every push runs the full 105-test suite on GitHub Actions (Ubuntu 24.04,
+Every push runs the full 106-test suite on GitHub Actions (Ubuntu 24.04,
 Qt 6): `.github/workflows/ci.yml` — the CI has already caught two
 portability bugs (non-standard baud constants, newer-Qt API) that Arch
 machines could not.

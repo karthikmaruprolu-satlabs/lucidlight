@@ -52,12 +52,22 @@ int main(int argc, char *argv[]) {
     // Let bindings settle, then grab.
     QTimer::singleShot(700, &app, [&] {
         // Simulation mode: paint a few representative entries so screenshots
-        // and layout checks show real traffic.
+        // and layout checks show real traffic. LUCID_US=1 turns on the µs
+        // stamp mode for the grab.
         if (!qEnvironmentVariableIsEmpty("LUCID_SIM")) {
+            if (!qEnvironmentVariableIsEmpty("LUCID_US"))
+                backend.scriptSetMicroStamps(true);
             backend.log()->append(CommLog::Rx, 0, "PING 12 34\r\n");
             backend.log()->append(CommLog::Tx, 0, "PONG\r\n");
             backend.log()->append(CommLog::Rx, 0, QByteArray::fromHex("48656C6C6F2C20776F726C642100"));
             backend.log()->appendComment("Script: handshake done");
+            // A Modbus exchange the way the live decoder renders it: request,
+            // reply, and the decode annotation attached under the reply.
+            backend.log()->append(CommLog::Tx, 0, QByteArray::fromHex("01030064000285D4"));
+            backend.log()->append(CommLog::Rx, 0, QByteArray::fromHex("01030402BC02C37B5E"));
+            backend.log()->appendComment(
+                QStringLiteral("MODBUS addr=1 FC=3 read-holding-regs 2 regs: 700 707 CRC ok"),
+                true);
             backend.log()->append(CommLog::Rx, 1, QByteArray::fromHex("0142FF00"), true);
             // Regression guard: the view must actually show the rows. A
             // broken delegate (e.g. required model properties on a nested
