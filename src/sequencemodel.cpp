@@ -11,6 +11,7 @@ QHash<int, QByteArray> SequenceModel::roleNames() const {
         {IdRole, "seqId"},
         {NameRole, "name"},
         {IsSendRole, "isSend"},
+        {GroupRole, "group"},
         {FormatRole, "format"},
         {DataRole, "data"},
         {PreviewRole, "preview"},
@@ -34,6 +35,7 @@ QVariant SequenceModel::data(const QModelIndex &index, int role) const {
     case IdRole: return seq.id;
     case NameRole: return seq.name;
     case IsSendRole: return seq.isSend;
+    case GroupRole: return seq.isSend ? QStringLiteral("send") : QStringLiteral("receive");
     case FormatRole: return int(seq.format);
     case DataRole: return seq.data;
     case PreviewRole: {
@@ -190,4 +192,54 @@ void SequenceModel::replaceAll(const QVector<Sequence> &sequences) {
     endResetModel();
     emit countChanged();
     emit sequenceChanged();
+}
+
+// ---------------------------------------------------------------------------
+// SequenceProxy — the panel's grouped view (send first, then receive)
+// ---------------------------------------------------------------------------
+
+SequenceProxy::SequenceProxy(SequenceModel *source, QObject *parent)
+    : QAbstractListModel(parent), m_source(source) {
+    connect(source, &QAbstractItemModel::rowsInserted, this, &SequenceProxy::rebuild,
+            Qt::QueuedConnection);
+    connect(source, &QAbstractItemModel::rowsRemoved, this, &SequenceProxy::rebuild,
+            Qt::QueuedConnection);
+    connect(source, &QAbstractItemModel::modelReset, this, &SequenceProxy::rebuild,
+            Qt::QueuedConnection);
+    connect(source, &QAbstractItemModel::dataChanged, this, &SequenceProxy::rebuild,
+            Qt::QueuedConnection);
+    connect(source, &QAbstractItemModel::rowsMoved, this, &SequenceProxy::rebuild,
+            Qt::QueuedConnection);
+    rebuild();
+}
+
+void SequenceProxy::rebuild() {
+    beginResetModel();
+    m_map.clear();
+    // Sends in list order, then receives in list order.
+    for (int i = 0; i < m_source->rowCount(); ++i)
+        if (m_source->sequenceAt(i)->isSend)
+            m_map.append(i);
+    for (int i = 0; i < m_source->rowCount(); ++i)
+        if (!m_source->sequenceAt(i)->isSend)
+            m_map.append(i);
+    endResetModel();
+}
+
+int SequenceProxy::rowCount(const QModelIndex &parent) const {
+    return parent.isValid() ? 0 : m_map.size();
+}
+
+QHash<int, QByteArray> SequenceProxy::roleNames() const {
+    return m_source->roleNames();
+}
+
+QVariant SequenceProxy::data(const QModelIndex &index, int role) const {
+    if (!index.isValid() || index.row() >= m_map.size())
+        return {};
+    return m_source->index(m_map.at(index.row()), 0).data(role);
+}
+
+int SequenceProxy::sourceRow(int proxyRow) const {
+    return proxyRow >= 0 && proxyRow < m_map.size() ? m_map.at(proxyRow) : -1;
 }

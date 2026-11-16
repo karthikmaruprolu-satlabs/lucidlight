@@ -14,7 +14,7 @@ Rectangle {
 
     function refresh() {
         list.model = 0;
-        list.model = backend.sequences;
+        list.model = backend.sequencesGrouped;
     }
 
     ColumnLayout {
@@ -52,9 +52,38 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            model: backend.sequences
+            model: backend.sequencesGrouped
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
+
+            // Grouped view: send sequences first, then receive sequences.
+            // The underlying combined order is the scripting index, so the
+            // delegates map their display row back before acting on it.
+            section.property: "group"
+            section.delegate: Item {
+                required property string section
+                width: list.width
+                height: 22
+                Label {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: section === "receive" ? qsTr("Receive sequences") : qsTr("Send sequences")
+                    color: section === "receive" ? theme.green : theme.blue
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 0.5
+                    font.capitalization: Font.AllUppercase
+                }
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: theme.muted
+                    opacity: 0.25
+                }
+            }
 
             delegate: Item {
                 required property int index
@@ -64,6 +93,9 @@ Rectangle {
                 required property string comment
                 required property int hotkey
                 required property bool seqEnabled
+                // The combined scripting index (DL.SendSequence / the label
+                // prefix), not the grouped display row.
+                readonly property int srcIndex: backend.sequencesGrouped.sourceRow(index)
                 width: list.width
                 height: 44
                 // Docklight shows the sequence documentation next to the
@@ -107,7 +139,7 @@ Rectangle {
                         Label {
                             Layout.fillWidth: true
                             // Docklight shows the 0-based sequence index.
-                            text: "<span style=\"color:" + Qt.rgba(theme.muted.r, theme.muted.g, theme.muted.b, 0.7) + "\">[" + index + "]</span>  " + name
+                            text: "<span style=\"color:" + Qt.rgba(theme.muted.r, theme.muted.g, theme.muted.b, 0.7) + "\">[" + srcIndex + "]</span>  " + name
                             color: seqEnabled ? theme.bright : theme.muted
                             font.pixelSize: 12
                             textFormat: Text.RichText
@@ -132,7 +164,7 @@ Rectangle {
                         text: "✎"
                         font.pixelSize: 11
                         flat: true
-                        onClicked: root.requestEdit(index)
+                        onClicked: root.requestEdit(srcIndex)
                     }
                 }
                 MouseArea {
@@ -142,11 +174,11 @@ Rectangle {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onClicked: (mouse) => {
                         if (mouse.button === Qt.RightButton) {
-                            root.requestEdit(index);
+                            root.requestEdit(srcIndex);
                         } else if (isSend) {
-                            backend.sendSequence(index);
+                            backend.sendSequence(srcIndex);
                         } else {
-                            root.requestEdit(index);
+                            root.requestEdit(srcIndex);
                         }
                     }
                 }

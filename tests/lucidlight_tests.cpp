@@ -2205,6 +2205,34 @@ private slots:
         QVERIFY(!csv.contains("Log File"));   // strictly tabular
     }
 
+    void sequencesGroupedPanelOrder()
+    {
+        Backend backend;
+        backend.sequences()->add(QVariantMap{
+            {"name", "Send A"}, {"isSend", true}, {"data", "A"}, {"format", "Text"}});
+        backend.sequences()->add(QVariantMap{
+            {"name", "Recv A"}, {"isSend", false}, {"data", "RA"}, {"format", "Text"}});
+        backend.sequences()->add(QVariantMap{
+            {"name", "Send B"}, {"isSend", true}, {"data", "B"}, {"format", "Text"}});
+        backend.sequences()->add(QVariantMap{
+            {"name", "Recv B"}, {"isSend", false}, {"data", "RB"}, {"format", "Text"}});
+        // The grouped view rebuilds via a queued connection (a model reset
+        // must not fire inside the source's insert signal), so spin the loop.
+        SequenceProxy *proxy = backend.sequencesGrouped();
+        QVERIFY(proxy);
+        QTRY_COMPARE(proxy->rowCount(), 4);   // queued rebuild lands
+        QStringList names;
+        QVector<int> src;
+        for (int i = 0; i < proxy->rowCount(); ++i) {
+            names << proxy->index(i, 0).data(SequenceModel::NameRole).toString();
+            src << proxy->sourceRow(i);
+        }
+        // Sends first (list order preserved within a group), receives after.
+        QCOMPARE(names, QStringList({"Send A", "Send B", "Recv A", "Recv B"}));
+        // Display rows map back to the combined scripting index.
+        QCOMPARE(src, QVector<int>({0, 2, 1, 3}));
+    }
+
     void sequenceLibraryRoundTrip()
     {
         Backend backend;

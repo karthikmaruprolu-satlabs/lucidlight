@@ -33,6 +33,7 @@ Backend::Backend(QObject *parent)
       m_a(new ChannelSettings(this)),
       m_b(new ChannelSettings(this)),
       m_sequences(new SequenceModel(this)),
+      m_sequenceProxy(new SequenceProxy(m_sequences, this)),
       m_log(new CommLog(this)),
       m_runner(new ScriptRunner(m_comm, m_sequences, this, this)),
       m_ports(new PortEnumerator(this)),

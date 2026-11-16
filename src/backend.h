@@ -43,6 +43,7 @@ class Backend : public QObject {
     Q_PROPERTY(ChannelSettings *channelA READ channelA CONSTANT)
     Q_PROPERTY(ChannelSettings *channelB READ channelB CONSTANT)
     Q_PROPERTY(SequenceModel *sequences READ sequences CONSTANT)
+    Q_PROPERTY(SequenceProxy *sequencesGrouped READ sequencesGrouped CONSTANT)
     Q_PROPERTY(CommLog *log READ log CONSTANT)
     Q_PROPERTY(ScriptRunner *scripts READ scripts CONSTANT)
     // Docklight's continuous communication logging (F2 start, F3 stop).
@@ -97,6 +98,7 @@ public:
     ChannelSettings *channelA() const { return m_a; }
     ChannelSettings *channelB() const { return m_b; }
     SequenceModel *sequences() const { return m_sequences; }
+    SequenceProxy *sequencesGrouped() const { return m_sequenceProxy; }
     CommLog *log() const { return m_log; }
     ScriptRunner *scripts() const { return m_runner; }
     Q_INVOKABLE bool scriptDispatch(const QString &path);
@@ -268,6 +270,7 @@ private:
     ChannelSettings *m_a;
     ChannelSettings *m_b;
     SequenceModel *m_sequences;
+    SequenceProxy *m_sequenceProxy = nullptr;
     CommLog *m_log;
     ScriptRunner *m_runner;
     QVector<ScriptRunner *> m_dispatches;

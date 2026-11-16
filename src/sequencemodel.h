@@ -41,6 +41,7 @@ public:
         IdRole = Qt::UserRole + 1,
         NameRole,
         IsSendRole,
+        GroupRole,        // "send"/"receive" string, for QML view sectioning
         FormatRole,
         DataRole,
         PreviewRole,      // rendered bytes, for the list
@@ -79,7 +80,6 @@ public:
 
     void replaceAll(const QVector<Sequence> &sequences);
     void appendMany(const QVector<Sequence> &sequences);
-
 signals:
     void countChanged();
     void sendRequested(int row);
@@ -90,4 +90,30 @@ private:
 
     QVector<Sequence> m_sequences;
     int m_nextId = 1;
+};
+
+// The panel view of the sequence list: send sequences first, then receive
+// sequences, each group in list order. The underlying model's combined index
+// stays the scripting index (DL.SendSequence / DL.WaitForSequence), so the
+// proxy only reorders the display and maps rows back for the delegates.
+// Implemented as a plain mapping model — QSortFilterProxyModel's dynamic
+// re-sort mis-positions rows inserted one at a time.
+class SequenceProxy : public QAbstractListModel {
+    Q_OBJECT
+public:
+    explicit SequenceProxy(SequenceModel *source, QObject *parent = nullptr);
+
+    int rowCount(const QModelIndex &parent = {}) const override;
+    QVariant data(const QModelIndex &index, int role) const override;
+    QHash<int, QByteArray> roleNames() const override;
+
+    // Display row -> combined scripting index, for the panel's actions.
+    Q_INVOKABLE int sourceRow(int proxyRow) const;
+
+private slots:
+    void rebuild();
+
+private:
+    SequenceModel *m_source;
+    QVector<int> m_map;   // display row -> source row
 };
