@@ -185,14 +185,31 @@ int runHeadless(const QString &projectPath, const QString &scriptPath, int durat
 
 // `lucidlight skill` prints the agent skill; `skill install` puts it where
 // the pi agent harness reads skills from, following the same pattern Hype
-// uses for its agents.
+// uses for its agents. The installed file carries the front matter the
+// harness expects (name, description with triggers), like every other
+// skill in ~/.pi/agent/skills/.
 int runSkill(bool install) {
     QFile resource(":/skill.md");
     if (!resource.open(QIODevice::ReadOnly)) {
         QTextStream(stderr) << "Bundled skill not found\n";
         return 1;
     }
-    const QByteArray contents = resource.readAll();
+    const QByteArray contents =
+        QByteArrayLiteral(
+            "---\n"
+            "name: lucidlight\n"
+            "description: >\n"
+            "  Drive and test serial, TCP, UDP and UNIX-socket devices with Lucidlight,\n"
+            "  a Docklight-Scripting-style monitor and scripting tool installed on this\n"
+            "  machine. Use when a task involves talking to a serial device or PTY,\n"
+            "  debugging a device protocol, automated send/receive test runs, Modbus\n"
+            "  RTU checks, or scripted regression tests against hardware. Triggers:\n"
+            "  lucidlight, serial port, /dev/ttyUSB, /dev/ttyACM, RS232, UART, serial\n"
+            "  terminal, serial test, device bring-up, device protocol, Modbus,\n"
+            "  .llproj, DL.SendHex, DL.WaitForSequence, DL.ReceiveStr, serial\n"
+            "  regression, socat PTY loopback, headless serial test.\n"
+            "---\n\n")
+        + resource.readAll();
     if (!install) {
         QTextStream(stdout) << QString::fromUtf8(contents);
         return 0;
