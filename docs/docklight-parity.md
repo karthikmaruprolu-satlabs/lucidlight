@@ -92,6 +92,7 @@ not source-compatible, but the DL API names and semantics are replicated.
       never missed)
 - [x] DL.AddComment (timeStampAfterComment, lineBreakAndPadding)
 - [x] DL.GetDocklightTimeStamp ([dateTime] [, millis] [, trimmed])
+- [x] DL.GetTimeStamp — Lucidlight-friendly alias for the same call (the Docklight name is kept verbatim for script compatibility)
 - [x] DL.Pause + DL.Wait alias
 - [x] DL.GetReceiveCounter(nameOrIndex) / DL.ResetReceiveCounter([nameOrIndex])
 - [x] DL.OpenProject / DL.Quit
