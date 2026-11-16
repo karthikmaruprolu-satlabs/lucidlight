@@ -256,9 +256,9 @@ tests/grab_harness   # LUCID_SIM=1 LUCID_TAB=script ./grab_harness — screensho
 ```
 
 Layout: `src/` C++ core, `src/qml/` UI, `tests/` suite + screenshot harness,
-`docs/` (parity checklist, man page, agent skill), `examples/` sample
-projects, `pkgbuild/` Arch packaging. One `.pro` file drives everything;
-no build system beyond qmake6 + make.
+`docs/` (parity checklist, [architecture](docs/architecture.md), man page,
+agent skill), `examples/` sample projects, `pkgbuild/` Arch packaging. One
+`.pro` file drives everything; no build system beyond qmake6 + make.
 
 ## Continuous integration
 
