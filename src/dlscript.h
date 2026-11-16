@@ -265,8 +265,11 @@ public:
     Q_INVOKABLE void Comment(const QString &text) { AddComment(text); }
     Q_INVOKABLE QString GetCommWindowData(const QString &representation = QStringLiteral("A"));
     Q_INVOKABLE void SetContentsFilter(int filter);
+    // Docklight's API name; DL.GetTimeStamp is the friendlier Lucidlight alias.
     Q_INVOKABLE QString GetDocklightTimeStamp(const QJSValue &dateTime = QJSValue(),
                                               int milliseconds = -1, bool trimmed = false);
+    Q_INVOKABLE QString GetTimeStamp(const QJSValue &dateTime = QJSValue(),
+                             int milliseconds = -1, bool useMicro = false);
 
     // ---- conversions, matching the classic string helpers ----------------------
     Q_INVOKABLE QString HexToStr(const QString &hex);   // byte → char, 1:1 (Latin-1)

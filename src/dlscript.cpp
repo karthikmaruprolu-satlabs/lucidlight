@@ -939,6 +939,11 @@ void DLObject::SetContentsFilter(int filter) {
 
 // Docklight: result = DL.GetDocklightTimeStamp([dateTime] [, millis]
 // [, trimmed]) — with the trailing space kept by default for compatibility.
+// Lucidlight alias for the Docklight-named GetDocklightTimeStamp.
+QString DLObject::GetTimeStamp(const QJSValue &dateTime, int milliseconds, bool useMicro) {
+    return GetDocklightTimeStamp(dateTime, milliseconds, useMicro);
+}
+
 QString DLObject::GetDocklightTimeStamp(const QJSValue &dateTime, int milliseconds,
                                         bool trimmed) {
     QDateTime stamp = QDateTime::currentDateTime();
