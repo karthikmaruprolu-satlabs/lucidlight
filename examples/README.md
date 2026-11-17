@@ -3,11 +3,12 @@
 Load these with `File > Open…` (or `lucidlight run --script … <project>`).
 
 ## pingpong.llproj
-The manual's "Ping Pong" getting-started flow: send the *Ping* sequence
-(hotkey Ctrl+F1) and the *Pong received* trigger comments with a `%_T`
-timestamp macro when the answer arrives. Run two instances connected by a
-null modem (or `socat PTY,link=/tmp/llptyA PTY,link=/tmp/llptyB,raw,echo=0`)
-and send Ping from one, watch the comment appear in the other.
+A full ping-pong conversation in one project, run twice over a null modem
+(or `socat PTY,link=/tmp/llA PTY,link=/tmp/llB,raw,echo=0`, one end per
+instance). Press `Ctrl+F1` (*Ping*): the other side's *Ping received*
+pattern answers with the *Pong* send sequence via reply-to, and its
+arrival comments `Got a Pong at %_T` (timestamp macro) in your window.
+Both sides can start the conversation.
 
 ## modbus-master.llproj / modbus-slave.llproj
 A complete Modbus RTU master/slave pair over a virtual null modem:
