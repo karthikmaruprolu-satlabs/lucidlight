@@ -14,4 +14,12 @@ namespace ModbusDecoder {
 // or an empty string when the frame is not decodable Modbus RTU.
 QString tryDecode(const QByteArray &frame);
 
+// Streaming variant for live decoding: appends the received bytes to a
+// per-channel accumulator (keyed by channelKey) and decodes as soon as a
+// complete frame is buffered — so a Modbus frame split across several
+// receives still gets its annotation. Returns the annotation for a newly
+// completed frame, or an empty string. Stale partial data (> 2 s old) is
+// discarded.
+QString tryDecodeStream(quintptr channelKey, const QByteArray &data);
+
 } // namespace ModbusDecoder

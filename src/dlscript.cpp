@@ -1857,7 +1857,6 @@ QString preprocessIncludes(QString code, const QDir &baseDir, int depth, QString
         QStringLiteral("^[ \\t]*#include[ \\t]+(?:\"([^\"]+)\"|(\\S+))[ \\t]*$"),
         QRegularExpression::MultilineOption);
     QString out;
-    qsizetype pos = 0;
     auto match = includeRe.globalMatch(code);
     // Rebuild line by line so includes splice in order.
     qsizetype lastEnd = 0;

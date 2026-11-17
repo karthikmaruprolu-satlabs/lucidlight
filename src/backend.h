@@ -28,7 +28,7 @@ class Backend : public QObject {
     Q_PROPERTY(bool running READ running NOTIFY stateChanged)
     // While the Send Sequence Parameter dialog is open, Docklight pauses
     // communication: no receive processing and no periodical sends.
-    Q_PROPERTY(bool dialogPause WRITE setDialogPause NOTIFY stateChanged)
+    Q_PROPERTY(bool dialogPause READ dialogPause WRITE setDialogPause NOTIFY stateChanged)
     // Docklight's Snapshot: run communication with the window frozen until a
     // trigger sequence fires, then reveal the buffered data and stop.
     Q_PROPERTY(bool snapshotArmed READ snapshotArmed NOTIFY stateChanged)
@@ -242,6 +242,7 @@ signals:
 private slots:
     void handleIncoming(int channel, const QByteArray &data);
     void setDialogPause(bool paused);
+    bool dialogPause() const { return m_dialogPause; }
     void handleTransmitted(int channel, const QByteArray &data);
     void handleTrigger(int sequenceId, const QVector<SequenceMatcher::Token> &tokens, int channel);
     void checkRepeats();

@@ -20,15 +20,6 @@ namespace {
 // the declaration pass. DL.* names are handled structurally.
 QStringList procedureNames;
 
-bool isKeywordLine(const QString &head)
-{
-    static const QStringList keywords = {
-        "dim", "const", "redim", "option", "on", "set", "exit", "erase",
-        "randomize", "call", "with", "rem"
-    };
-    return keywords.contains(head.toLower());
-}
-
 // Split on a character that is not inside a string literal.
 QStringList splitOutside(const QString &text, QChar sep)
 {
@@ -163,8 +154,6 @@ namespace {
 // naively breaks expressions like i & " " & i+1 ("1 11" instead of "1 2").
 // This pass wraps the true operands of every & in parentheses, so
 // i & " " & i+1  becomes  (i) + (" ") + (i + 1).
-bool isIdentChar(QChar c) { return c.isLetterOrNumber() || c == '_' || c == '$' || c == '.'; }
-
 // Walk left over one operand starting at pos (inclusive), returns the start
 // index of the operand. Handles atoms, calls, indexing and the tighter
 // arithmetic operators (* / \\ % + - and Mod).

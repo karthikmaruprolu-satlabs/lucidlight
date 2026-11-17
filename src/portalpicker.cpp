@@ -7,7 +7,7 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDateTime>
-#include <QUrl>>
+#include <QUrl>
 
 namespace {
 QVariant filtersVariant(const QString &filterName, const QString &filterPattern) {

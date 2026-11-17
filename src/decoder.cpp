@@ -1,6 +1,8 @@
 #include "decoder.h"
 
+#include <QDateTime>
 #include <QStringList>
+#include <QHash>
 
 namespace ModbusDecoder {
 
@@ -47,7 +49,6 @@ static int expectedLength(int fc, const uchar *data, int size) {
     switch (fc) {
     case 1: case 2: case 3: case 4:
         if (size >= 5) {
-            const int count = (data[2] << 8) | data[3];
             // Request: fixed 8 bytes. Response: byteCount header.
             return size == 8 ? fixed(8) : 5 + data[2];
         }
@@ -69,6 +70,63 @@ static int expectedLength(int fc, const uchar *data, int size) {
             return fixed(5);      // exception: addr fc code crc
         return -1;
     }
+}
+
+// Per-channel accumulators for tryDecodeStream: buffered bytes plus the
+// arrival time of the last append, so stale partial frames can expire.
+struct StreamBuffer {
+    QByteArray bytes;
+    qint64 lastAppendMs = 0;
+};
+static QHash<quintptr, StreamBuffer> streamBuffers;
+
+QString tryDecodeStream(quintptr channelKey, const QByteArray &data) {
+    StreamBuffer &buf = streamBuffers[channelKey];
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (buf.lastAppendMs != 0 && now - buf.lastAppendMs > 2000
+        && !buf.bytes.isEmpty())
+        buf.bytes.clear();   // a stale partial frame is worthless
+    buf.bytes.append(data);
+    buf.lastAppendMs = now;
+
+    QString result;
+    while (!buf.bytes.isEmpty()) {
+        const QByteArray &b = buf.bytes;
+        if (b.size() > 512) {          // runaway garbage
+            buf.bytes.clear();
+            break;
+        }
+        if (b.size() < 2)
+            break;
+        const int addr = uchar(b[0]);
+        const int fc = uchar(b[1]);
+        if (addr < 1 || addr > 247 || functionName(fc).isEmpty()) {
+            buf.bytes.remove(0, 1);    // resync on noise
+            continue;
+        }
+        const int need = expectedLength(fc, reinterpret_cast<const uchar *>(b.constData()), b.size());
+        if (need <= 0) {
+            // Shape not deterministic — try what is buffered as-is, else resync.
+            const QString direct = tryDecode(b);
+            if (!direct.isEmpty()) {
+                result = direct;
+                buf.bytes.clear();
+            } else {
+                buf.bytes.remove(0, 1);
+            }
+            break;
+        }
+        if (b.size() < need)
+            break;                     // wait for the next burst
+        const QString decoded = tryDecode(b.left(need));
+        if (!decoded.isEmpty()) {
+            result = decoded;
+            buf.bytes.remove(0, need);
+        } else {
+            buf.bytes.remove(0, 1);    // not valid at this boundary: resync
+        }
+    }
+    return result;
 }
 
 QString tryDecode(const QByteArray &frame) {

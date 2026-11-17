@@ -317,7 +317,7 @@ void Backend::handleIncoming(int channel, const QByteArray &data) {
     // Protocol decode: a valid Modbus RTU frame gets a one-line annotation
     // attached directly under the received row.
     if (m_modbusDecode && channel >= 0 && channel < 2) {
-        const QString decoded = ModbusDecoder::tryDecode(data);
+        const QString decoded = ModbusDecoder::tryDecodeStream(quintptr(channel), data);
         if (!decoded.isEmpty()) {
             m_log->appendComment(decoded, true);
             m_logger.onRow(CommLog::Comment, channel, QByteArray(), decoded,
