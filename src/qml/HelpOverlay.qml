@@ -37,22 +37,22 @@ Popup {
 
             Repeater {
                 model: [
-                    ["Space", qsTr("Start / stop communication")],
+                    ["Space / F5 / F6", qsTr("Start / stop communication")],
                     ["Enter", qsTr("Send the typed data")],
-                    ["F5 / F6", qsTr("Start / stop communication")],
-                    ["F2 / F3", qsTr("Start / stop communication logging")],
-                    ["Ctrl+F5 / Ctrl+F6", qsTr("Keyboard console on / off")],
+                    ["F2 / F3", qsTr("Start / stop file logging")],
+                    ["Ctrl+F1 – F12", qsTr("Send the sequence bound to the key, anywhere")],
                     ["F12", qsTr("Show / hide the script area")],
-                    ["Shift+F12", qsTr("Show / hide the sequence lists")],
-                    ["Ctrl+F1 – F12", qsTr("Send the sequence bound to the key")],
-                    ["Shift+F5", qsTr("Run the script")],
-                    ["Ctrl+R", qsTr("Run the script")],
+                    ["Shift+F12", qsTr("Show / hide the sequence panel")],
+                    ["Ctrl+F5 / Ctrl+F6", qsTr("Keyboard console on / off")],
+                    ["Shift+F5 / Ctrl+R", qsTr("Run the script")],
+                    ["Shift+F6", qsTr("Stop the script (and dispatched scripts)")],
                     ["Ctrl+T", qsTr("Save the script")],
                     ["Ctrl+K / Ctrl+W", qsTr("Clear the window")],
                     ["Ctrl+F", qsTr("Search in the data")],
                     ["Ctrl+B", qsTr("Toggle the sequence panel")],
                     ["Ctrl+O / Ctrl+S", qsTr("Open / save the project")],
                     ["Ctrl+Shift+S", qsTr("Save the communication log")],
+                    ["Ctrl+P", qsTr("Print the communication window")],
                     ["?", qsTr("This help")],
                     ["Ctrl+Q", qsTr("Quit")]
                 ]

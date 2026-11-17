@@ -131,16 +131,19 @@ needs `CRC-MODBUS L`.
 
 | Key | Action |
 |---|---|
-| `Space` | Start / stop communication |
+| `Space`, `F5` / `F6` | Start / stop communication |
 | `Enter` | Send the typed data |
-| `F1`–`F12` | Send the sequence bound to that key |
+| `F2` / `F3` | Start / stop file logging |
 | `Ctrl+F1`–`F12` | Send the sequence bound to that key, anywhere |
+| `F12` | Show / hide the script area |
+| `Shift+F12` | Show / hide the sequence panel |
+| `Ctrl+F5` / `Ctrl+F6` | Keyboard console on / off |
+| `Shift+F5` / `Ctrl+R` | Run the script |
 | `Shift+F6` | Stop the script (and all dispatched scripts) |
-| `Ctrl+R` | Run the script |
-| `Ctrl+K` | Clear the window |
+| `Ctrl+T` | Save the script |
+| `Ctrl+K` / `Ctrl+W` | Clear the window |
 | `Ctrl+F` | Search in the data |
 | `Ctrl+B` | Toggle the sequence panel |
-| `Ctrl+T` | Keyboard console on/off |
 | `Ctrl+O` / `Ctrl+S` | Open / save the project |
 | `Ctrl+Shift+S` | Save the communication log |
 | `Ctrl+P` | Print the communication window (PDF) |
