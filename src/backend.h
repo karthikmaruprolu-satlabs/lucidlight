@@ -2,7 +2,7 @@
 
 // Single source of truth for the version, used by the About dialog,
 // --version and the PKGBUILD.
-inline const char *APP_VERSION = "0.3.3";
+inline const char *APP_VERSION = "0.3.4";
 
 #include <QElapsedTimer>
 #include <QObject>

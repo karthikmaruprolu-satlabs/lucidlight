@@ -2,6 +2,6 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-"$ROOT/bin/build"
+"$ROOT/build.sh"
 cd "$ROOT/pkgbuild"
 exec makepkg -fsi "$@"
